@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # ============================================================
 FRED_API_BASE = "https://api.stlouisfed.org/fred/series/observations"
 FRED_CSV_DIRECT = "https://fred.stlouisfed.org/graph/fredgraph.csv"  # No-key fallback
-YAHOO_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
+YAHOO_CHART_BASE = "https://query2.finance.yahoo.com/v8/finance/chart"
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -189,20 +189,63 @@ class FREDFetcher:
 class YahooFetcher:
     """Fetch daily OHLCV data from Yahoo Finance chart API."""
 
+    def __init__(self):
+        self._crumb = None
+        self._session = None
+
+    def _get_session(self):
+        """Get a session with Yahoo Finance cookie + crumb."""
+        if self._session is not None:
+            return self._session, self._crumb
+
+        self._session = requests.Session()
+        self._session.headers.update({"User-Agent": USER_AGENT})
+
+        # Method 1: Try to get crumb from Yahoo
+        try:
+            # Visit Yahoo Finance to get cookies
+            self._session.get("https://fc.yahoo.com", timeout=10)
+            # Get crumb
+            crumb_resp = self._session.get(
+                "https://query2.finance.yahoo.com/v1/test/getcrumb",
+                timeout=10
+            )
+            if crumb_resp.status_code == 200 and crumb_resp.text:
+                self._crumb = crumb_resp.text
+                logger.info(f"Yahoo: got crumb OK")
+        except Exception as e:
+            logger.warning(f"Yahoo crumb fetch failed: {e}, will try without crumb")
+            self._crumb = None
+
+        return self._session, self._crumb
+
     def fetch(self, ticker: str, period: str = "2y") -> pd.DataFrame:
         """
         Fetch Yahoo Finance data. Returns DataFrame with DatetimeIndex
         and columns: open, high, low, close, volume.
         """
+        session, crumb = self._get_session()
+
         url = f"{YAHOO_CHART_BASE}/{ticker}"
         params = {
             "range": period,
             "interval": "1d",
             "includePrePost": "false",
         }
+        if crumb:
+            params["crumb"] = crumb
 
         try:
-            resp = _http_get(url, params=params)
+            resp = session.get(url, params=params, timeout=30)
+            if resp.status_code != 200:
+                # Fallback: try query1 without crumb
+                fallback_url = url.replace("query2.", "query1.")
+                logger.warning(f"Yahoo query2 returned {resp.status_code}, trying query1...")
+                resp = requests.get(fallback_url, params={
+                    "range": period, "interval": "1d", "includePrePost": "false"
+                }, headers={"User-Agent": USER_AGENT}, timeout=30)
+                resp.raise_for_status()
+
             data = resp.json()
             return self._parse_chart_response(data, ticker)
         except Exception as e:

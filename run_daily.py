@@ -238,7 +238,7 @@ def main():
     logger.info("Phase 10: Computing composite liquidity score...")
     from src.scorer import MacroScorer
     scorer = MacroScorer(config)
-    score_data = scorer.compute(panel, signal_panel)
+    score_data = scorer.compute(daily_panel, signal_panel)
     logger.info(f"Score: {score_data['composite_score']:.0f}/100 -> {score_data['tier_cn']}")
 
     # ---- Phase 11: Web JSON Export ----

@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>宏观流动性仪表盘</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:#0f172a;color:#e2e8f0;line-height:1.6;font-size:14px}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+
+/* Loading */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;height:80vh;gap:16px}
+.loading-spinner{width:48px;height:48px;border:4px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:#94a3b8;font-size:14px}
+
+/* Header */
+.header{display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid #1e293b;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+.header h1{font-size:22px;font-weight:800;color:#f1f5f9;letter-spacing:-0.5px}
+.header-meta{font-size:12px;color:#64748b}
+.header-badge{display:inline-block;padding:2px 10px;background:#1e293b;border-radius:6px;font-size:11px;color:#94a3b8;margin-left:8px}
+
+/* Score Hero */
+.score-hero{background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#1e293b 100%);border:1px solid #334155;border-radius:20px;padding:32px;margin-bottom:24px;display:flex;gap:32px;flex-wrap:wrap}
+.score-left{flex:0 0 240px;text-align:center;display:flex;flex-direction:column;align-items:center}
+.score-label{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#64748b;margin-bottom:8px}
+.score-number{font-size:80px;font-weight:900;line-height:1;letter-spacing:-4px;font-variant-numeric:tabular-nums}
+.score-tier{display:inline-block;padding:6px 20px;border-radius:12px;font-size:16px;font-weight:800;margin-top:10px}
+.score-right{flex:1;min-width:300px}
+.advice-position{font-size:22px;font-weight:800;margin-bottom:8px}
+.advice-detail{font-size:14px;line-height:1.8;color:#94a3b8;margin-bottom:16px}
+.advice-action{font-size:13px;padding:8px 14px;background:rgba(255,255,255,0.04);border-radius:8px;border-left:3px solid #3b82f6;color:#cbd5e1;margin-bottom:6px}
+.advice-risk{font-size:12px;color:#fca5a5;padding:6px 12px;background:rgba(239,68,68,0.08);border-radius:6px;margin-top:10px}
+.advice-catalyst{font-size:12px;color:#86efac;padding:6px 12px;background:rgba(34,197,94,0.08);border-radius:6px;margin-top:6px}
+
+/* Asset cards */
+.asset-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+.asset-card{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:20px;display:flex;align-items:center;gap:16px}
+.asset-icon{font-size:36px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;background:#0f172a;border-radius:12px}
+.asset-info{flex:1}
+.asset-name{font-size:13px;color:#94a3b8;font-weight:600}
+.asset-score-num{font-size:28px;font-weight:900;font-variant-numeric:tabular-nums}
+.asset-tier-badge{display:inline-block;padding:2px 10px;border-radius:6px;font-size:11px;font-weight:700;margin-top:2px}
+.asset-note{font-size:10px;color:#64748b;margin-top:4px;line-height:1.4}
+
+/* Score bars */
+.breakdown{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:24px;margin-bottom:24px}
+.breakdown-title{font-size:16px;font-weight:700;margin-bottom:4px}
+.breakdown-sub{font-size:11px;color:#64748b;margin-bottom:16px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.bar-label{width:110px;font-size:12px;font-weight:600;color:#94a3b8;text-align:right;flex-shrink:0}
+.bar-weight{font-size:10px;color:#475569;margin-left:4px}
+.bar-track{flex:1;height:22px;background:#0f172a;border-radius:11px;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:11px;transition:width 1s ease-out}
+.bar-val{width:36px;font-size:14px;font-weight:800;text-align:right;font-variant-numeric:tabular-nums}
+.bar-signal{width:32px;font-size:11px;font-weight:700;text-align:center}
+
+/* Factors */
+.factors{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px;padding-top:18px;border-top:1px solid #334155}
+.factors-title{font-size:12px;font-weight:700;margin-bottom:6px}
+.factor-item{font-size:12px;padding:3px 0;color:#cbd5e1}
+
+/* Section divider */
+.section-divider{font-size:18px;font-weight:800;color:#f1f5f9;margin:32px 0 16px;padding-bottom:8px;border-bottom:2px solid #334155;letter-spacing:-0.3px}
+
+/* Judgment */
+.judgment{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:20px 24px;margin-bottom:24px}
+.judgment-regime{display:inline-block;padding:6px 16px;border-radius:10px;font-size:16px;font-weight:800;margin-bottom:10px}
+.judgment-text{font-size:14px;line-height:1.7;color:#cbd5e1}
+.judgment-tags{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.judgment-tag{padding:3px 10px;background:#0f172a;border-radius:6px;font-size:11px;color:#94a3b8}
+
+/* Summary table */
+.table-wrap{background:#1e293b;border:1px solid #334155;border-radius:14px;overflow:hidden;margin-bottom:24px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#0f172a;padding:10px 12px;text-align:left;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#64748b;border-bottom:2px solid #334155}
+td{padding:9px 12px;border-bottom:1px solid #1e293b}
+tr:hover{background:rgba(255,255,255,0.02)}
+.num{text-align:right;font-variant-numeric:tabular-nums;font-family:"SF Mono",Monaco,"Fira Code",monospace}
+.signal-badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700}
+
+/* Indicator sections */
+.indicator{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:24px;margin-bottom:20px}
+.indicator-header{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.indicator-num{width:32px;height:32px;border-radius:50%;background:#3b82f6;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0}
+.indicator-title{font-size:16px;font-weight:700}
+.indicator-val{font-size:12px;color:#64748b;margin-top:2px}
+.indicator-chart{margin-bottom:16px;border-radius:8px;overflow:hidden}
+.indicator-chart img{width:100%;display:block}
+.explain-what{margin-bottom:12px}
+.explain-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#64748b;margin-bottom:4px}
+.explain-text{font-size:13px;line-height:1.7;color:#94a3b8}
+.explain-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.explain-good{padding:12px;background:rgba(16,185,129,0.06);border-left:3px solid #10b981;border-radius:0 8px 8px 0}
+.explain-bad{padding:12px;background:rgba(239,68,68,0.06);border-left:3px solid #ef4444;border-radius:0 8px 8px 0}
+.interpret-box{background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:14px 16px}
+.interpret-box .explain-text{color:#93c5fd}
+
+/* Quality */
+.quality{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:20px 24px;margin-bottom:24px}
+
+/* Quick nav */
+.nav-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:24px}
+.nav-link{display:inline-block;padding:5px 14px;background:#1e293b;border:1px solid #334155;border-radius:8px;font-size:11px;color:#94a3b8;text-decoration:none;cursor:pointer;transition:all .15s}
+.nav-link:hover{background:#334155;color:#f1f5f9}
+
+/* Footer */
+.footer{text-align:center;padding:24px 0;font-size:11px;color:#475569;border-top:1px solid #1e293b;margin-top:32px}
+
+/* Note */
+.note{font-size:11px;color:#475569;padding:8px 12px;background:#0f172a;border-radius:6px;margin-top:8px;line-height:1.6}
+
+/* Responsive */
+@media(max-width:768px){
+  .score-hero{padding:20px}
+  .score-left{flex:0 0 auto;width:100%}
+  .score-number{font-size:64px}
+  .explain-grid{grid-template-columns:1fr}
+  .factors{grid-template-columns:1fr}
+  .bar-label{width:80px;font-size:11px}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
+
+// ============================================================
+// Indicator knowledge (static, same as Python version)
+// ============================================================
+const KNOWLEDGE = {
+  net_liquidity: {
+    title: "净流动性 (Net Liquidity)",
+    what: "衡量美联储实际向金融体系释放了多少可用流动性。公式：Fed总资产 - TGA - ON RRP。这是整个框架的核心锚。",
+    high: "金融体系水位充裕，银行间资金宽松，风险资产倾向获得支撑。",
+    low: "系统性流动性收紧，银行准备金下降，资金成本上升压力增大。",
+    chart: "net_liquidity",
+  },
+  composite: {
+    title: "净流动性 vs S&P 500",
+    what: "将净流动性与标普500叠加对比，验证'流动性驱动风险偏好'的核心逻辑。两者背离时需警惕。",
+    high: "两者同步上行 = 流动性驱动的健康牛市。",
+    low: "两者背离 = 流动性基础松动，风险资产可能滞后反应。",
+    chart: "composite_netliq_spx",
+  },
+  sofr: {
+    title: "SOFR (担保隔夜融资利率)",
+    what: "美国短期资金市场基准利率。紧贴联邦基金利率区间运行，显著偏高说明短期融资市场紧张。",
+    high: "融资成本上升，可能反映准备金不足。对杠杆策略不利。",
+    low: "资金面宽松，借贷成本低，有利于杠杆策略。",
+    chart: "sofr",
+  },
+  move_proxy: {
+    title: "利率波动代理 (MOVE Proxy)",
+    what: "用VIX × 国债利率波动率构建。反映债券市场隐含波动预期，利率波动率升高通常先于股市波动。",
+    high: "债市恐慌加剧，杠杆基金被迫去杠杆，可能传导至风险资产。",
+    low: "利率市场平静，有利于carry和duration策略。",
+    chart: "move_proxy",
+  },
+  hy_oas: {
+    title: "高收益信用利差 (HY OAS)",
+    what: "高收益债相对国债的价差。信用市场的'恐慌指标'。>500bps压力区，>800bps危机区。",
+    high: "信用市场定价违约风险上升，领先于经济衰退3-6个月。",
+    low: "信用市场乐观，企业融资环境友好。",
+    chart: "hy_oas",
+  },
+  usdjpy: {
+    title: "USD/JPY (美元兑日元)",
+    what: "全球套息交易风向标。投资者借入低息日元、投资高息美元资产。走势反映套息交易拥挤程度和平仓风险。",
+    high: "日元弱、套息盈利扩大、Risk-On。但极端高位可能触发BOJ干预。",
+    low: "日元走强、套息平仓、全球去杠杆压力上升。快速下跌是最危险的宏观信号之一。",
+    chart: "usdjpy",
+  },
+  carry_spread: {
+    title: "套息利差 (US 2Y - JP 2Y)",
+    what: "美国vs日本2年期国债利差，衡量套息交易的利差基础。利差越大→套息收入越丰厚→吸引更多资金。",
+    high: "套息有强利差支撑，全球资金倾向流入美元资产。",
+    low: "套息动力衰减，快速收窄会触发大规模平仓。",
+    chart: "carry_spread_bps",
+  },
+  curve_slope: {
+    title: "收益率曲线斜率 (10Y - 2Y)",
+    what: "最经典的经济周期前瞻指标。持续倒挂是衰退的最可靠先行指标（领先12-18个月）。",
+    high: "曲线陡峭化：市场预期经济向好。银行盈利改善。",
+    low: "曲线平坦/倒挂：市场预期经济放缓或衰退。",
+    chart: "curve_slope_bps",
+  },
+  vix: {
+    title: "VIX (恐慌指数)",
+    what: "标普500期权30天隐含波动率。20-25警戒，25-30紧张，30+恐慌。极端高位（>35）反而可能是底部信号。",
+    high: "市场恐慌加剧，通常伴随股市急跌和流动性收紧。",
+    low: "市场极度平静。持续低波可能孕育尾部风险（明斯基时刻）。",
+    chart: "vix",
+  },
+  spx: {
+    title: "S&P 500 (标普500)",
+    what: "全球风险资产的锚。在流动性框架中作为'确认指标'——观察是否跟随流动性信号反应。",
+    high: "风险偏好强劲。如同时净流动性充裕 = 健康牛市。",
+    low: "风险偏好恶化。如与流动性收紧同步下跌 = 确认趋紧。",
+    chart: "spx",
+  },
+  dxy: {
+    title: "美元指数 (DXY)",
+    what: "美元对一篮子主要货币的加权指数。美元走强 = 全球美元流动性收紧，对非美资产和大宗商品形成压力。",
+    high: "全球美元流动性紧缩，不利于非美资产、大宗、新兴市场。",
+    low: "美元流动性外溢，全球Risk-On。有利于BTC和新兴市场。",
+    chart: "dxy",
+  },
+  btc: {
+    title: "Bitcoin (BTC/USD)",
+    what: "净流动性的杠杆版本。BTC对全球流动性变化极度敏感，往往比传统风险资产更早、更猛烈地反映流动性收缩。",
+    high: "流动性极度充裕，投机情绪高涨。",
+    low: "流动性收紧的'矿井金丝雀'。大幅下跌但SPX未反应时，可能是前瞻预警。",
+    chart: "btc",
+  },
+};
+
+const SECTION_ORDER = [
+  "net_liquidity","composite","sofr","move_proxy","hy_oas",
+  "usdjpy","carry_spread","curve_slope","vix","spx","dxy","btc",
+];
+
+const IND_NAME = {
+  net_liquidity:"净流动性", vix:"VIX恐慌指数", hy_oas:"高收益信用利差",
+  sofr:"SOFR资金利率", dxy:"美元指数", carry_spread_bps:"套息利差",
+  curve_slope_bps:"收益率曲线", on_rrp:"逆回购(RRP)",
+};
+
+const DATA_KEY_MAP = {
+  net_liquidity:"net_liquidity", composite:"spx", sofr:"sofr", move_proxy:"move_proxy",
+  hy_oas:"hy_oas", usdjpy:"usdjpy", carry_spread:"carry_spread_bps",
+  curve_slope:"curve_slope_bps", vix:"vix", spx:"spx", dxy:"dxy", btc:"btc",
+};
+
+const METRIC_DEFS = [
+  ["net_liquidity","净流动性","B",1],
+  ["sofr","SOFR","%",4],
+  ["hy_oas","HY OAS","%",2],
+  ["move_proxy","MOVE Proxy","",1],
+  ["vix","VIX","",1],
+  ["usdjpy","USD/JPY","",1],
+  ["carry_spread_bps","套息利差","bps",0],
+  ["curve_slope_bps","曲线斜率","bps",0],
+  ["spx","S&P 500","",0],
+  ["btc","Bitcoin","$",0],
+  ["dxy","DXY","",1],
+  ["us2y","US 2Y","%",3],
+  ["us10y","US 10Y","%",3],
+];
+
+const BAD_WHEN_UP = new Set(["sofr","hy_oas","vix","move_proxy","dxy"]);
+const PCT_IND = new Set(["spx","btc","usdjpy","dxy"]);
+
+// ============================================================
+// Components
+// ============================================================
+
+function SignalBadge({sig}) {
+  const map = {
+    STRESS:  {icon:"🔴", bg:"#451a1a", color:"#fca5a5"},
+    TIGHT:   {icon:"🟡", bg:"#422006", color:"#fcd34d"},
+    EASING:  {icon:"🟢", bg:"#052e16", color:"#86efac"},
+    NEUTRAL: {icon:"⚪", bg:"#1e293b", color:"#94a3b8"},
+  };
+  const s = map[sig] || map.NEUTRAL;
+  return <span className="signal-badge" style={{background:s.bg,color:s.color}}>{s.icon} {sig}</span>;
+}
+
+function ScoreHero({data}) {
+  const {score, advice, asset_outlook} = data;
+  return (
+    <div className="score-hero">
+      <div className="score-left">
+        <div className="score-label">宏观流动性综合评分</div>
+        <div className="score-number" style={{color:score.tier_color}}>{score.composite}</div>
+        <div className="score-tier" style={{
+          background: score.tier_color + "18",
+          color: score.tier_color,
+          border: `2px solid ${score.tier_color}`
+        }}>
+          {score.tier_emoji} {score.tier_cn}
+        </div>
+        <GaugeSVG score={score.composite} color={score.tier_color} />
+      </div>
+      <div className="score-right">
+        <div className="advice-position" style={{color:score.tier_color}}>{advice.position}</div>
+        <div className="advice-detail">{advice.position_detail}</div>
+        <div className="advice-action">{advice.btc_action}</div>
+        <div className="advice-action">{advice.spx_action}</div>
+        <div className="advice-action">{advice.nasdaq_action}</div>
+        {advice.key_risk && <div className="advice-risk">{advice.key_risk}</div>}
+        {advice.key_catalyst && <div className="advice-catalyst">{advice.key_catalyst}</div>}
+      </div>
+    </div>
+  );
+}
+
+function GaugeSVG({score, color}) {
+  const cx=120, cy=120, r=90;
+  const angle = -135 + (score/100)*270;
+  const rad = a => a * Math.PI / 180;
+  const px = (a) => cx + r * Math.cos(rad(a));
+  const py = (a) => cy + r * Math.sin(rad(a));
+  const nl = 75;
+  const nx = cx + nl * Math.cos(rad(angle));
+  const ny = cy + nl * Math.sin(rad(angle));
+
+  const arcs = [
+    {s:-135, e:-90, c:"#991b1b"},
+    {s:-90, e:-45, c:"#ef4444"},
+    {s:-45, e:0, c:"#eab308"},
+    {s:0, e:45, c:"#22c55e"},
+    {s:45, e:135, c:"#16a34a"},
+  ];
+
+  return (
+    <svg viewBox="0 0 240 160" style={{width:220,height:150,marginTop:8}}>
+      {arcs.map((a,i) => (
+        <path key={i}
+          d={`M ${px(a.s)} ${py(a.s)} A ${r} ${r} 0 0 1 ${px(a.e)} ${py(a.e)}`}
+          fill="none" stroke={a.c} strokeWidth="14" opacity="0.35"
+          strokeLinecap={i===0?"round":i===4?"round":"butt"}
+        />
+      ))}
+      <line x1={cx} y1={cy} x2={nx.toFixed(1)} y2={ny.toFixed(1)}
+        stroke={color} strokeWidth="3" strokeLinecap="round"/>
+      <circle cx={cx} cy={cy} r="5" fill={color}/>
+      <text x="32" y="142" fontSize="9" fill="#64748b">0</text>
+      <text x="112" y="22" fontSize="9" fill="#64748b" textAnchor="middle">50</text>
+      <text x="202" y="142" fontSize="9" fill="#64748b">100</text>
+    </svg>
+  );
+}
+
+function AssetCards({outlook}) {
+  const icons = {btc:"₿", spx:"📈", nasdaq:"💻"};
+  const labels = {btc:"Bitcoin", spx:"S&P 500", nasdaq:"纳斯达克"};
+  return (
+    <div className="asset-grid">
+      {["btc","spx","nasdaq"].map(k => {
+        const a = outlook[k];
+        if (!a) return null;
+        return (
+          <div className="asset-card" key={k}>
+            <div className="asset-icon">{icons[k]}</div>
+            <div className="asset-info">
+              <div className="asset-name">{labels[k]}</div>
+              <div className="asset-score-num" style={{color:a.color}}>{Math.round(a.score)}</div>
+              <div className="asset-tier-badge" style={{
+                background:a.color+"20", color:a.color, border:`1px solid ${a.color}`
+              }}>{a.tier_cn}</div>
+              <div className="asset-note">{a.note}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ScoreBreakdown({data}) {
+  const {indicator_scores, weights, advice} = data;
+  const sorted = Object.entries(indicator_scores).sort((a,b) => b[1].score - a[1].score);
+
+  return (
+    <div className="breakdown">
+      <div className="breakdown-title">各指标评分明细</div>
+      <div className="breakdown-sub">评分0-100，越高越利多风险资产 | 权重基于宏观研究+回测相关性</div>
+      {sorted.map(([name, info]) => (
+        <div className="bar-row" key={name}>
+          <div className="bar-label">
+            {IND_NAME[name]||name}
+            <span className="bar-weight">({weights[name]||0}%)</span>
+          </div>
+          <div className="bar-track">
+            <div className="bar-fill" style={{width:`${info.score}%`,background:info.signal_color}}/>
+          </div>
+          <div className="bar-val" style={{color:info.signal_color}}>{Math.round(info.score)}</div>
+          <div className="bar-signal" style={{color:info.signal_color}}>{info.signal_cn}</div>
+        </div>
+      ))}
+      <div className="factors">
+        <div>
+          <div className="factors-title" style={{color:"#22c55e"}}>利多因素</div>
+          {(advice.bullish_factors||[]).map(([n,s,sig],i) =>
+            <div className="factor-item" style={{color:"#86efac"}} key={i}>
+              ✅ {IND_NAME[n]||n}（{Math.round(s)}分 {sig}）
+            </div>
+          )}
+          {!(advice.bullish_factors||[]).length &&
+            <div className="factor-item" style={{color:"#475569"}}>暂无明显利多</div>}
+        </div>
+        <div>
+          <div className="factors-title" style={{color:"#ef4444"}}>利空因素</div>
+          {(advice.bearish_factors||[]).map(([n,s,sig],i) =>
+            <div className="factor-item" style={{color:"#fca5a5"}} key={i}>
+              ⚠️ {IND_NAME[n]||n}（{Math.round(s)}分 {sig}）
+            </div>
+          )}
+          {!(advice.bearish_factors||[]).length &&
+            <div className="factor-item" style={{color:"#475569"}}>暂无明显利空</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function JudgmentBox({judgment}) {
+  const styles = {
+    TIGHTENING:  {bg:"#451a1a",border:"#ef4444",icon:"🔴",color:"#fca5a5"},
+    LOCAL_DISTURBANCE: {bg:"#422006",border:"#f59e0b",icon:"🟡",color:"#fcd34d"},
+    STABLE:      {bg:"#052e16",border:"#10b981",icon:"🟢",color:"#86efac"},
+    UNKNOWN:     {bg:"#1e293b",border:"#64748b",icon:"⚪",color:"#94a3b8"},
+  };
+  const s = styles[judgment.regime] || styles.UNKNOWN;
+
+  return (
+    <div className="judgment">
+      <div className="judgment-regime" style={{background:s.bg,border:`1px solid ${s.border}`,color:s.color}}>
+        {s.icon} {judgment.regime_cn || "?"}
+      </div>
+      <div className="judgment-text">{judgment.explanation}</div>
+      <div className="judgment-tags">
+        <span className="judgment-tag">净流动性走弱: <b>{judgment.net_liquidity_weakening ? "是" : "否"}</b></span>
+        <span className="judgment-tag">确认维度: <b>{judgment.stress_count||0}</b>个</span>
+        <span className="judgment-tag">风险资产确认: <b>{judgment.risk_asset_confirming ? "是" : "否"}</b></span>
+      </div>
+    </div>
+  );
+}
+
+function SummaryTable({readings, changes}) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead><tr>
+          <th>指标</th><th style={{textAlign:"right"}}>最新值</th>
+          <th style={{textAlign:"right"}}>5日变动</th>
+          <th style={{textAlign:"center"}}>Z-Score</th>
+          <th style={{textAlign:"center"}}>分位</th>
+          <th style={{textAlign:"center"}}>信号</th>
+        </tr></thead>
+        <tbody>
+          {METRIC_DEFS.map(([key,label,unit,dec]) => {
+            const r = readings[key] || {};
+            const c = changes[key] || {};
+            const val = r.value;
+            const valStr = val != null ? Number(val).toLocaleString(undefined,{minimumFractionDigits:dec,maximumFractionDigits:dec})+unit : "N/A";
+            const chg5 = PCT_IND.has(key) && c.pct_5d != null ? c.pct_5d : c.chg_5d;
+            let chgStr = "N/A", chgColor = "#64748b";
+            if (chg5 != null) {
+              chgStr = PCT_IND.has(key) && c.pct_5d != null
+                ? (c.pct_5d*100).toFixed(1)+"%" : Number(chg5).toFixed(2);
+              if (chg5 > 0) chgStr = "+"+chgStr;
+              chgColor = BAD_WHEN_UP.has(key)
+                ? (chg5>0?"#fca5a5":chg5<0?"#86efac":"#64748b")
+                : (chg5<0?"#fca5a5":chg5>0?"#86efac":"#64748b");
+            }
+            const zs = r.zscore;
+            const zsStr = typeof zs === "number" ? (zs>=0?"+":"")+zs.toFixed(2) : "N/A";
+            const pctl = r.percentile;
+            const pctlStr = pctl != null ? Math.round(pctl*100)+"%" : "N/A";
+            return (
+              <tr key={key}>
+                <td style={{fontWeight:600}}>{label}</td>
+                <td className="num">{valStr}</td>
+                <td className="num" style={{color:chgColor,fontWeight:600}}>{chgStr}</td>
+                <td style={{textAlign:"center"}}>{zsStr}</td>
+                <td style={{textAlign:"center"}}>{pctlStr}</td>
+                <td style={{textAlign:"center"}}><SignalBadge sig={r.signal || "NEUTRAL"}/></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function IndicatorSection({secKey, idx, readings, changes, charts}) {
+  const kb = KNOWLEDGE[secKey];
+  if (!kb) return null;
+  const chartB64 = charts[kb.chart];
+  if (!chartB64) return null;
+
+  const dataKey = DATA_KEY_MAP[secKey] || secKey;
+  const r = readings[dataKey] || {};
+  const val = r.value;
+  let valDisplay = "N/A";
+  if (val != null) {
+    if (["spx","btc"].includes(dataKey)) valDisplay = Math.round(val).toLocaleString();
+    else if (["sofr","hy_oas"].includes(dataKey)) valDisplay = Number(val).toFixed(4)+"%";
+    else if (dataKey==="net_liquidity") valDisplay = Number(val).toFixed(1)+"B";
+    else if (["carry_spread_bps","curve_slope_bps"].includes(dataKey)) valDisplay = Math.round(val)+" bps";
+    else valDisplay = Number(val).toFixed(2);
+  }
+
+  return (
+    <div className="indicator" id={`sec-${secKey}`}>
+      <div className="indicator-header">
+        <div className="indicator-num">{idx}</div>
+        <div>
+          <div className="indicator-title">{kb.title}</div>
+          <div className="indicator-val">
+            当前: <b>{valDisplay}</b> <SignalBadge sig={r.signal || "NEUTRAL"}/>
+          </div>
+        </div>
+      </div>
+      <div className="indicator-chart">
+        <img src={`data:image/png;base64,${chartB64}`} alt={kb.title}/>
+      </div>
+      <div className="explain-what">
+        <div className="explain-label">这是什么</div>
+        <div className="explain-text">{kb.what}</div>
+      </div>
+      <div className="explain-grid">
+        <div className="explain-good">
+          <div className="explain-label">▲ 偏高意味着</div>
+          <div className="explain-text">{kb.high}</div>
+        </div>
+        <div className="explain-bad">
+          <div className="explain-label">▼ 偏低意味着</div>
+          <div className="explain-text">{kb.low}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QualityTable({quality}) {
+  return (
+    <div className="quality">
+      <table>
+        <thead><tr><th>指标</th><th>状态</th><th>覆盖率</th><th>滞后(天)</th><th>最后有效日</th></tr></thead>
+        <tbody>
+          {Object.entries(quality).filter(([k,v]) => typeof v === "object").map(([k,v]) => (
+            <tr key={k}>
+              <td>{k}</td>
+              <td><span style={{color:v.status==="ok"?"#86efac":"#fcd34d"}}>●</span> {v.status}</td>
+              <td>{Math.round((v.coverage||0)*100)}%</td>
+              <td>{v.stale_days||0}</td>
+              <td>{v.last_valid||"N/A"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ============================================================
+// Main App
+// ============================================================
+function App() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch("./data/latest.json")
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(setData)
+      .catch(e => setError(e.message));
+  }, []);
+
+  if (error) return (
+    <div className="container">
+      <div className="loading">
+        <div style={{fontSize:48}}>⚠️</div>
+        <div className="loading-text">数据加载失败: {error}</div>
+        <div className="loading-text" style={{fontSize:12}}>请确认 data/latest.json 存在</div>
+      </div>
+    </div>
+  );
+
+  if (!data) return (
+    <div className="container">
+      <div className="loading">
+        <div className="loading-spinner"/>
+        <div className="loading-text">加载数据中...</div>
+      </div>
+    </div>
+  );
+
+  const meta = data.meta || {};
+  const reportDate = meta.report_date || "";
+  const genTime = (data.generated_at || "").slice(0,19);
+
+  return (
+    <div className="container">
+      {/* Header */}
+      <div className="header">
+        <div>
+          <h1>宏观流动性仪表盘</h1>
+          <div className="header-meta">
+            {reportDate}
+            <span className="header-badge">更新于 {genTime}</span>
+            <span className="header-badge">{meta.data_range?.trading_days || 0} 交易日</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Score Hero */}
+      <ScoreHero data={data} />
+
+      {/* Asset Outlook */}
+      <AssetCards outlook={data.asset_outlook || {}} />
+
+      {/* Score Breakdown */}
+      <ScoreBreakdown data={data} />
+
+      <div className="note" style={{marginBottom:24}}>
+        评分方法：每个指标综合「当前分位(40%)+近期趋势(35%)+Z-Score偏离度(25%)」计算0-100分。
+        权重来自宏观金融研究(Howell 2020, Adrian & Shin 2010等)及历史相关性分析。
+        BTC对流动性beta约1.5x，纳斯达克约1.05x，标普500约0.9x。本评分仅供参考，不构成投资建议。
+      </div>
+
+      {/* Judgment */}
+      <div className="section-divider">综合研判</div>
+      <JudgmentBox judgment={data.judgment || {}} />
+
+      {/* Summary Table */}
+      <div className="section-divider">指标速览</div>
+      <SummaryTable readings={data.readings || {}} changes={data.changes || {}} />
+
+      {/* Nav */}
+      <div className="section-divider">逐项分析</div>
+      <div className="nav-bar">
+        {SECTION_ORDER.map(k => {
+          const kb = KNOWLEDGE[k];
+          return kb ? (
+            <a className="nav-link" key={k}
+               onClick={() => document.getElementById(`sec-${k}`)?.scrollIntoView({behavior:"smooth"})}>
+              {kb.title.split("(")[0].trim().split(" ")[0]}
+            </a>
+          ) : null;
+        })}
+      </div>
+
+      {/* Indicator Sections */}
+      {SECTION_ORDER.map((k, i) => (
+        <IndicatorSection
+          key={k} secKey={k} idx={i+1}
+          readings={data.readings || {}}
+          changes={data.changes || {}}
+          charts={data.charts || {}}
+        />
+      ))}
+
+      {/* Data Quality */}
+      <div className="section-divider">数据源状态</div>
+      <QualityTable quality={data.quality || {}} />
+
+      {/* Footer */}
+      <div className="footer">
+        宏观流动性仪表盘 | 数据源: FRED API + Yahoo Finance | 每日 08:00 UTC+8 自动更新<br/>
+        本报告仅供研究参考，不构成投资建议。市场有风险，投资需谨慎。
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

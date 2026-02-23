@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.egg-info/
+cache/
+output/
+!web/data/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

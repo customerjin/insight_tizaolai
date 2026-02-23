@@ -1,0 +1,167 @@
+# ============================================================
+# Macro Liquidity Daily Monitor - Configuration
+# ============================================================
+
+# FRED API Key (free: https://fred.stlouisfed.org/docs/api/api_key.html)
+# Leave empty to use backup sources (higher latency, less coverage)
+fred_api_key: "0a5a7aff1eca5a1753fed29cf53c5aca"
+
+# ------------------------------------------------------------
+# Data Sources - Core Indicators
+# ------------------------------------------------------------
+indicators:
+  # --- Net Liquidity Components ---
+  fed_total_assets:
+    name: "Fed Total Assets"
+    fred_id: "WALCL"
+    frequency: "weekly"
+    unit: "millions"
+    category: "net_liquidity"
+
+  tga_balance:
+    name: "Treasury General Account"
+    fred_id: "WTREGEN"
+    frequency: "weekly"
+    unit: "millions"
+    category: "net_liquidity"
+
+  on_rrp:
+    name: "Overnight Reverse Repo"
+    fred_id: "RRPONTSYD"
+    frequency: "daily"
+    unit: "billions"
+    category: "net_liquidity"
+
+  # --- Short-term Funding ---
+  sofr:
+    name: "SOFR"
+    fred_id: "SOFR"
+    frequency: "daily"
+    unit: "percent"
+    category: "funding_rate"
+
+  # --- Credit ---
+  hy_oas:
+    name: "HY OAS (ICE BofA)"
+    fred_id: "BAMLH0A0HYM2"
+    frequency: "daily"
+    unit: "percent"
+    category: "credit"
+
+  # --- Rates ---
+  us2y:
+    name: "US 2Y Yield"
+    fred_id: "DGS2"
+    frequency: "daily"
+    unit: "percent"
+    category: "rates"
+
+  us10y:
+    name: "US 10Y Yield"
+    fred_id: "DGS10"
+    frequency: "daily"
+    unit: "percent"
+    category: "rates"
+
+  # --- Volatility ---
+  vix:
+    name: "VIX"
+    fred_id: "VIXCLS"
+    frequency: "daily"
+    unit: "index"
+    category: "volatility"
+
+  # --- FX (FRED backup) ---
+  usdjpy_fred:
+    name: "USD/JPY (FRED)"
+    fred_id: "DEXJPUS"
+    frequency: "daily"
+    unit: "jpy_per_usd"
+    category: "fx"
+
+# ------------------------------------------------------------
+# Yahoo Finance Sources (no API key needed)
+# ------------------------------------------------------------
+yahoo_sources:
+  usdjpy:
+    name: "USD/JPY"
+    ticker: "USDJPY=X"
+    category: "fx"
+
+  spx:
+    name: "S&P 500"
+    ticker: "^GSPC"
+    category: "risk_asset"
+
+  dxy:
+    name: "US Dollar Index"
+    ticker: "DX-Y.NYB"
+    category: "fx"
+
+  btc:
+    name: "Bitcoin"
+    ticker: "BTC-USD"
+    category: "risk_asset"
+
+# ------------------------------------------------------------
+# Japan 2Y Yield (special handling)
+# ------------------------------------------------------------
+jp2y:
+  name: "Japan 2Y Yield"
+  fred_id: "IRLTST01JPM156N"  # Monthly, needs interpolation
+  frequency: "monthly"
+  fallback_rate: 0.5  # BOJ policy rate as floor anchor
+  unit: "percent"
+
+# ------------------------------------------------------------
+# Signal Parameters
+# ------------------------------------------------------------
+signal:
+  lookback_days: 252          # ~1 year for percentile/zscore
+  change_windows: [1, 5, 20]  # 1d, 1w, 1m change
+  zscore_window: 60           # Rolling zscore window
+  percentile_window: 252      # Rolling percentile window
+
+# ------------------------------------------------------------
+# Judgment Rules Thresholds
+# ------------------------------------------------------------
+judgment:
+  # Net liquidity weakening: 5d change < threshold (billions)
+  net_liq_weak_threshold_5d: -50
+  # SOFR stress: 5d change > threshold (bps)
+  sofr_stress_threshold_5d: 5
+  # VIX (MOVE proxy) stress: level > threshold
+  vix_stress_threshold: 25
+  # Carry trade stress: USDJPY 5d drop > threshold (yen)
+  usdjpy_stress_threshold_5d: -2.0
+  # US2Y-JP2Y spread narrowing: 5d change < threshold
+  carry_spread_narrow_threshold_5d: -10
+  # HY OAS widening: 5d change > threshold (bps)
+  hy_oas_widen_threshold_5d: 15
+  # Risk asset confirmation: SPX 5d return < threshold
+  spx_weak_threshold_5d: -0.02
+  # Minimum confirmations for "tightening" call
+  min_confirmations: 2
+
+# ------------------------------------------------------------
+# Output
+# ------------------------------------------------------------
+output:
+  base_dir: "output"
+  chart_lookback_days: 252  # 1 year charts
+  chart_dpi: 150
+  chart_style: "seaborn-v0_8-darkgrid"
+
+# ------------------------------------------------------------
+# Cache
+# ------------------------------------------------------------
+cache:
+  dir: "cache"
+  max_age_hours: 12  # Re-fetch if cache older than this
+
+# ------------------------------------------------------------
+# Logging
+# ------------------------------------------------------------
+logging:
+  level: "INFO"
+  dir: "output/logs"

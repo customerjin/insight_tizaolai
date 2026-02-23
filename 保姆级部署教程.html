@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>保姆级部署教程 - 宏观流动性仪表盘</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:#f8fafc;color:#1e293b;line-height:1.8;font-size:15px}
+.container{max-width:800px;margin:0 auto;padding:32px 24px}
+h1{font-size:28px;font-weight:800;margin-bottom:8px;letter-spacing:-0.5px}
+.subtitle{color:#64748b;font-size:14px;margin-bottom:32px}
+h2{font-size:22px;font-weight:700;margin:40px 0 16px;padding-bottom:8px;border-bottom:3px solid #1e293b;display:flex;align-items:center;gap:10px}
+h2 .num{width:36px;height:36px;border-radius:50%;background:#3b82f6;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+h3{font-size:16px;font-weight:700;margin:24px 0 8px;color:#1e40af}
+p{margin-bottom:12px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px 24px;margin:16px 0}
+.card-title{font-weight:700;font-size:15px;margin-bottom:8px}
+.step{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;margin:12px 0;display:flex;gap:14px;align-items:flex-start}
+.step-num{width:28px;height:28px;border-radius:50%;background:#eff6ff;color:#3b82f6;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;margin-top:2px}
+.step-content{flex:1}
+.step-content p{margin-bottom:4px}
+code{background:#f1f5f9;padding:2px 8px;border-radius:4px;font-family:"SF Mono",Monaco,"Fira Code",monospace;font-size:13px;color:#be185d}
+pre{background:#1e293b;color:#e2e8f0;padding:16px 20px;border-radius:10px;font-family:"SF Mono",Monaco,"Fira Code",monospace;font-size:13px;line-height:1.6;overflow-x:auto;margin:10px 0}
+pre .comment{color:#64748b}
+pre .highlight{color:#fbbf24}
+.tip{background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 18px;margin:12px 0;font-size:14px}
+.tip::before{content:"💡 ";font-size:16px}
+.warn{background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:14px 18px;margin:12px 0;font-size:14px}
+.warn::before{content:"⚠️ ";font-size:16px}
+.success{background:#d1fae5;border:1px solid #a7f3d0;border-radius:10px;padding:14px 18px;margin:12px 0;font-size:14px}
+.success::before{content:"✅ ";font-size:16px}
+.overview{background:linear-gradient(135deg,#0f172a,#1e293b);color:#e2e8f0;border-radius:14px;padding:24px;margin:16px 0}
+.overview h3{color:#93c5fd;margin-top:0}
+.overview p{color:#94a3b8}
+.arch{font-family:"SF Mono",Monaco,monospace;font-size:12px;line-height:1.8;color:#cbd5e1}
+a{color:#3b82f6;text-decoration:none}
+a:hover{text-decoration:underline}
+.img-placeholder{background:#f1f5f9;border:2px dashed #cbd5e1;border-radius:10px;padding:20px;text-align:center;color:#64748b;font-size:13px;margin:10px 0}
+.faq{margin:12px 0}
+.faq summary{font-weight:700;cursor:pointer;padding:10px 0;font-size:14px}
+.faq summary:hover{color:#3b82f6}
+.faq p{padding-left:16px;font-size:14px}
+hr{border:none;border-top:1px solid #e2e8f0;margin:32px 0}
+.toc{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px 24px;margin:24px 0}
+.toc-title{font-weight:700;margin-bottom:8px;font-size:14px;color:#64748b}
+.toc a{display:block;padding:4px 0;font-size:14px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>保姆级部署教程</h1>
+<p class="subtitle">把「宏观流动性仪表盘」变成一个所有人都能打开的网页，每天自动更新数据。<br>全程不需要写代码，跟着截图一步步操作就行。预计用时：20-30分钟。</p>
+
+<div class="overview">
+<h3>整体架构（看不懂没关系）</h3>
+<div class="arch">
+你的电脑 (一次性操作)           GitHub (代码仓库)           Vercel (网页托管)
+      │                              │                         │
+      ├── 上传代码 ──────────────────→│                         │
+      │                              │── 每天08:00自动 ──→ 跑Python脚本 ──→ 生成新数据
+      │                              │                         │
+      │                              │── push新数据 ───────────→│── 自动部署网页
+      │                              │                         │
+      │                              │                    用户打开网页 ← 读取最新数据
+</div>
+<p style="margin-top:12px;font-size:13px">简单说：GitHub 每天 8 点自动跑脚本更新数据 → Vercel 自动把最新网页发布出去。你啥都不用管。</p>
+</div>
+
+<div class="toc">
+<div class="toc-title">目录</div>
+<a href="#prep">准备工作（10分钟）</a>
+<a href="#github">第一步：上传代码到 GitHub（5分钟）</a>
+<a href="#secret">第二步：设置 API 密钥（2分钟）</a>
+<a href="#vercel">第三步：部署到 Vercel（5分钟）</a>
+<a href="#first-run">第四步：触发第一次数据更新（2分钟）</a>
+<a href="#done">完成！</a>
+<a href="#faq">常见问题</a>
+</div>
+
+<hr>
+
+<!-- ==================== 准备工作 ==================== -->
+<h2 id="prep"><span class="num">0</span> 准备工作</h2>
+
+<p>开始之前，确认以下几件事：</p>
+
+<div class="card">
+<div class="card-title">需要注册的账号（免费）</div>
+
+<div class="step">
+<div class="step-num">1</div>
+<div class="step-content">
+<p><strong>GitHub 账号</strong>（存放代码 + 每天自动运行脚本）</p>
+<p>没有的话去 <a href="https://github.com/signup" target="_blank">github.com/signup</a> 注册</p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">2</div>
+<div class="step-content">
+<p><strong>Vercel 账号</strong>（免费托管网页，自带 HTTPS）</p>
+<p>去 <a href="https://vercel.com/signup" target="_blank">vercel.com/signup</a>，<strong>直接用 GitHub 账号登录</strong>（最方便）</p>
+</div>
+</div>
+</div>
+
+<div class="card">
+<div class="card-title">电脑上需要的软件</div>
+
+<div class="step">
+<div class="step-num">1</div>
+<div class="step-content">
+<p><strong>Python 3</strong></p>
+<p>Mac：打开"终端"，输入 <code>python3 --version</code>，如果显示版本号说明已安装。没有的话去 <a href="https://www.python.org/downloads/" target="_blank">python.org/downloads</a> 下载。</p>
+<p>Windows：去 <a href="https://www.python.org/downloads/" target="_blank">python.org/downloads</a> 下载，<strong>安装时一定勾选 "Add Python to PATH"</strong>。</p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">2</div>
+<div class="step-content">
+<p><strong>Git</strong></p>
+<p>Mac：打开"终端"，输入 <code>git --version</code>，如果提示安装就点"安装"。</p>
+<p>Windows：去 <a href="https://git-scm.com/downloads" target="_blank">git-scm.com/downloads</a> 下载安装，一路点 Next。</p>
+</div>
+</div>
+</div>
+
+<div class="tip">
+<strong>什么是"终端"？</strong>
+Mac 上叫 "Terminal"（在 应用程序 → 实用工具 里），Windows 上叫 "PowerShell" 或 "命令提示符"（按 Win+R，输入 <code>cmd</code> 回车）。
+</div>
+
+<hr>
+
+<!-- ==================== 上传到 GitHub ==================== -->
+<h2 id="github"><span class="num">1</span> 上传代码到 GitHub</h2>
+
+<h3>1.1 在 GitHub 创建新仓库</h3>
+
+<div class="step">
+<div class="step-num">1</div>
+<div class="step-content">
+<p>打开 <a href="https://github.com/new" target="_blank">github.com/new</a></p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">2</div>
+<div class="step-content">
+<p>填写：</p>
+<p>• <strong>Repository name</strong>：输入 <code>macro-liquidity</code>（或者你喜欢的名字）</p>
+<p>• <strong>选择 Private</strong>（私有，只有你能看到）</p>
+<p>• 其他都不用勾，直接点绿色的 <strong>"Create repository"</strong> 按钮</p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">3</div>
+<div class="step-content">
+<p>创建后会看到一个页面，上面有一行类似这样的地址：</p>
+<pre>https://github.com/你的用户名/macro-liquidity.git</pre>
+<p><strong>复制这个地址</strong>，后面要用。</p>
+</div>
+</div>
+
+<h3>1.2 运行一键部署脚本（Mac 用户）</h3>
+
+<div class="card" style="background:#eff6ff;border-color:#bfdbfe">
+<div class="card-title" style="color:#1e40af">🎯 最简单的方式：双击运行</div>
+<p>在 <code>macro_liquidity_daily</code> 文件夹里找到 <strong>「一键部署.command」</strong> 文件，<strong>双击它</strong>。</p>
+<p style="font-size:13px;color:#64748b;margin-top:8px">⚠️ 如果 Mac 提示"无法打开"，右键点击这个文件 → 选「打开」→ 再点「打开」就行了。</p>
+</div>
+
+<p>这个脚本会自动帮你：安装依赖 → 跑一次 pipeline → 初始化 git → 问你 GitHub 用户名 → 推送代码。</p>
+<p>过程中它会让你输入 GitHub 用户名，照着输就行。如果弹出 GitHub 登录窗口，正常登录即可。</p>
+
+<div class="warn">如果双击没反应或报错，<strong>备用方案</strong>：打开终端 (Terminal)，输入 <code>cd </code>（cd后面有空格），然后<strong>把 macro_liquidity_daily 文件夹从 Finder 拖进终端窗口</strong>，回车，再输入 <code>bash 一键部署.command</code> 回车。</div>
+
+<div class="success">脚本跑完后，刷新 GitHub 网页，如果能看到你的代码文件，说明上传成功。</div>
+
+<hr>
+
+<!-- ==================== 设置 Secret ==================== -->
+<h2 id="secret"><span class="num">2</span> 设置 API 密钥</h2>
+
+<p>为了让 GitHub 每天自动跑脚本时能调用 FRED 数据，需要安全地存储你的 API Key。</p>
+
+<div class="step">
+<div class="step-num">1</div>
+<div class="step-content">
+<p>在 GitHub 打开你的仓库页面</p>
+<p>点顶部的 <strong>Settings</strong>（设置）标签</p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">2</div>
+<div class="step-content">
+<p>在左侧菜单找到 <strong>Secrets and variables</strong>，点击展开，选 <strong>Actions</strong></p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">3</div>
+<div class="step-content">
+<p>点绿色按钮 <strong>"New repository secret"</strong></p>
+<p>• <strong>Name</strong>：输入 <code>FRED_API_KEY</code>（全大写，一个字不差）</p>
+<p>• <strong>Secret</strong>：粘贴你的 FRED Key <code>0a5a7aff1eca5a1753fed29cf53c5aca</code></p>
+<p>点 <strong>"Add secret"</strong></p>
+</div>
+</div>
+
+<div class="success">看到 FRED_API_KEY 出现在 Secrets 列表里就行了。</div>
+
+<hr>
+
+<!-- ==================== 部署到 Vercel ==================== -->
+<h2 id="vercel"><span class="num">3</span> 部署到 Vercel</h2>
+
+<div class="step">
+<div class="step-num">1</div>
+<div class="step-content">
+<p>打开 <a href="https://vercel.com/new" target="_blank">vercel.com/new</a></p>
+<p>（如果还没登录，用 GitHub 账号登录）</p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">2</div>
+<div class="step-content">
+<p>在 "Import Git Repository" 列表里找到 <strong>macro-liquidity</strong>，点 <strong>Import</strong></p>
+<div class="tip">如果看不到你的仓库，点 "Adjust GitHub App Permissions"，给 Vercel 授权访问。</div>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">3</div>
+<div class="step-content">
+<p>配置页面，<strong>关键设置</strong>：</p>
+<p>• <strong>Framework Preset</strong>：选 <code>Other</code></p>
+<p>• <strong>Root Directory</strong>：点右边的 <strong>Edit</strong>，输入 <code>web</code>，点确认</p>
+<p style="color:#dc2626;font-weight:700">⬆️ 这步非常重要！一定要填 <code>web</code></p>
+<p>• Build Command：留空（默认）</p>
+<p>• Output Directory：留空（默认）</p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">4</div>
+<div class="step-content">
+<p>点 <strong>"Deploy"</strong></p>
+<p>等待 30-60 秒，部署完成后 Vercel 会给你一个网址，类似：</p>
+<pre>https://macro-liquidity.vercel.app</pre>
+<p>打开它，你应该能看到仪表盘页面（但此时数据可能还没更新，先别急）。</p>
+</div>
+</div>
+
+<div class="success">看到「宏观流动性仪表盘」页面出现就说明部署成功了！</div>
+
+<hr>
+
+<!-- ==================== 触发第一次更新 ==================== -->
+<h2 id="first-run"><span class="num">4</span> 触发第一次数据更新</h2>
+
+<p>现在网页已经上线了，但里面的数据还是旧的。让我们手动触发一次更新：</p>
+
+<div class="step">
+<div class="step-num">1</div>
+<div class="step-content">
+<p>打开 GitHub 你的仓库页面，点顶部的 <strong>Actions</strong> 标签</p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">2</div>
+<div class="step-content">
+<p>左侧找到 <strong>"Daily Liquidity Update"</strong>，点击进入</p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">3</div>
+<div class="step-content">
+<p>右边有个 <strong>"Run workflow"</strong> 按钮（下拉箭头），点它，再点绿色的 <strong>"Run workflow"</strong></p>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">4</div>
+<div class="step-content">
+<p>等待 2-5 分钟。页面会刷出一条运行记录，看到 <strong>绿色对勾 ✅</strong> 就说明成功了。</p>
+<div class="warn">如果看到 <strong>红色叉 ❌</strong>，点进去查看日志。最常见原因：FRED_API_KEY 没设置对（回第二步检查），或者 FRED 服务临时故障（过一会再试）。</div>
+</div>
+</div>
+
+<div class="step">
+<div class="step-num">5</div>
+<div class="step-content">
+<p>等 1 分钟让 Vercel 重新部署，然后刷新你的网页。</p>
+<p>如果看到了最新日期的数据和评分，恭喜你，全部搞定！🎉</p>
+</div>
+</div>
+
+<hr>
+
+<!-- ==================== 完成 ==================== -->
+<h2 id="done">🎉 完成！以后的事情</h2>
+
+<div class="card">
+<div class="card-title">自动运行</div>
+<p>从现在起，<strong>每天早上 8 点（北京时间）</strong>，GitHub 会自动：</p>
+<p>1. 从 FRED 和 Yahoo Finance 拉取最新数据</p>
+<p>2. 计算所有指标、评分、投资建议</p>
+<p>3. 更新网页</p>
+<p><strong>你什么都不用做</strong>，打开网址就能看到最新的仪表盘。</p>
+</div>
+
+<div class="card">
+<div class="card-title">你的网址</div>
+<p>默认地址：<code>https://你的项目名.vercel.app</code></p>
+<p>如果你有自己的域名，可以在 Vercel Dashboard → Settings → Domains 里绑定。</p>
+</div>
+
+<div class="card">
+<div class="card-title">费用</div>
+<p>• GitHub Actions：免费（每月 2000 分钟，一次运行约 3 分钟，一个月 ~90 分钟）</p>
+<p>• Vercel：免费（Hobby plan，个人使用完全够）</p>
+<p>• FRED API：免费</p>
+<p><strong>总计：$0</strong></p>
+</div>
+
+<hr>
+
+<!-- ==================== FAQ ==================== -->
+<h2 id="faq">常见问题</h2>
+
+<details class="faq">
+<summary>Q：Actions 运行失败了怎么办？</summary>
+<p>点进失败的运行记录，展开查看日志。常见原因：<br>
+• FRED API 临时故障 → 等几小时再 Run workflow<br>
+• Secret 名字写错了 → 确认是 <code>FRED_API_KEY</code> 不是 <code>fred_api_key</code><br>
+• 代码有问题 → 截图日志来找我</p>
+</details>
+
+<details class="faq">
+<summary>Q：数据看起来不对/没更新？</summary>
+<p>• 去 GitHub → Actions 确认今天的运行是否成功（绿勾）<br>
+• Vercel 通常在 30 秒内自动部署，但偶尔可能有延迟<br>
+• 浏览器强刷：Ctrl+Shift+R（Mac: Cmd+Shift+R）</p>
+</details>
+
+<details class="faq">
+<summary>Q：想改更新时间怎么办？</summary>
+<p>编辑 <code>.github/workflows/daily-update.yml</code> 文件里的 cron 表达式：</p>
+<pre><span class="comment"># 当前：每天 00:00 UTC = 08:00 北京时间</span>
+- cron: '0 0 * * *'
+
+<span class="comment"># 改成 16:00 北京时间 (= 08:00 UTC)</span>
+- cron: '0 8 * * *'
+
+<span class="comment"># 改成每天跑两次（08:00 和 20:00 北京时间）</span>
+- cron: '0 0,12 * * *'</pre>
+</details>
+
+<details class="faq">
+<summary>Q：想分享给朋友看？</summary>
+<p>直接把 Vercel 给的网址发给朋友就行。如果仓库是 Private 的，网页本身是公开的（只是代码不公开）。</p>
+</details>
+
+<details class="faq">
+<summary>Q：手机上能看吗？</summary>
+<p>可以，网页是响应式的，手机浏览器直接打开网址就行。</p>
+</details>
+
+<details class="faq">
+<summary>Q：想加新的指标怎么办？</summary>
+<p>这个需要改代码了，到时候再找我。</p>
+</details>
+
+<details class="faq">
+<summary>Q：完全不想碰终端/命令行，有更简单的办法吗？</summary>
+<p>目前这已经是最简化的方案了。终端操作只需要做一次（上传代码），之后就再也不用碰了。如果实在搞不定，可以截图报错信息来找我帮你排查。</p>
+</details>
+
+<div style="margin-top:40px;padding:20px;background:#f1f5f9;border-radius:12px;text-align:center;font-size:13px;color:#64748b">
+宏观流动性仪表盘 · 部署教程<br>
+遇到任何问题，截图发给我就行 🤝
+</div>
+
+</div>
+</body>
+</html>

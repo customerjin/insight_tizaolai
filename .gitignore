@@ -4,6 +4,7 @@ __pycache__/
 cache/
 output/
 !web/data/
+!data/
 .DS_Store
 Thumbs.db
 .vscode/

@@ -160,6 +160,73 @@ cache:
   max_age_hours: 12  # Re-fetch if cache older than this
 
 # ------------------------------------------------------------
+# Daily Brief Module (新增)
+# ------------------------------------------------------------
+daily_brief:
+  # 行情标的
+  market_indices:
+    - symbol: "^NDX"
+      name: "纳斯达克100"
+      name_en: "Nasdaq 100"
+      market: "US"
+      timezone: "US/Eastern"
+      trading_hours: {open: "09:30", close: "16:00"}
+      currency: "USD"
+    - symbol: "000300.SS"
+      name: "沪深300"
+      name_en: "CSI 300"
+      market: "CN"
+      timezone: "Asia/Shanghai"
+      trading_hours: {open: "09:30", close: "15:00"}
+      currency: "CNY"
+    - symbol: "^HSTECH"
+      name: "恒生科技"
+      name_en: "Hang Seng Tech"
+      market: "HK"
+      timezone: "Asia/Hong_Kong"
+      trading_hours: {open: "09:30", close: "16:00"}
+      currency: "HKD"
+    - symbol: "000001.SS"
+      name: "上证指数"
+      name_en: "SSE Composite"
+      market: "CN"
+      timezone: "Asia/Shanghai"
+      trading_hours: {open: "09:30", close: "15:00"}
+      currency: "CNY"
+    - symbol: "BTC-USD"
+      name: "比特币"
+      name_en: "Bitcoin"
+      market: "CRYPTO"
+      timezone: "UTC"
+      trading_hours: {open: "00:00", close: "23:59"}
+      currency: "USD"
+
+  # 明星股筛选
+  movers:
+    markets: ["US", "HK", "CN"]
+    top_n: 10
+    min_change_pct: 3.0
+
+  # 新闻配置
+  news:
+    max_articles: 30
+    top_n: 5
+    finnhub_api_key: ""  # Optional: Get free key at finnhub.io
+
+  # AI 解读 (可选，无 API Key 时自动降级为规则模板)
+  analysis:
+    provider: "none"       # "openai" / "anthropic" / "none"
+    api_key: ""            # Or set ANALYSIS_API_KEY env var
+    model: "gpt-4o-mini"   # Or claude-sonnet-4-5-20250929
+
+  # 缓存 TTL (秒)
+  cache:
+    market_ttl: 300        # 行情缓存 5 分钟
+    news_ttl: 1800         # 新闻缓存 30 分钟
+    analysis_ttl: 3600     # 解读缓存 1 小时
+    movers_ttl: 600        # 异动缓存 10 分钟
+
+# ------------------------------------------------------------
 # Logging
 # ------------------------------------------------------------
 logging:

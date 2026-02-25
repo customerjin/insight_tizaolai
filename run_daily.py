@@ -115,6 +115,45 @@ def setup_logging(config: dict) -> logging.Logger:
     return root_logger
 
 
+def run_daily_brief(config: dict, macro_data: dict = None, output_dir: Path = None) -> dict:
+    """Run the daily brief module. Returns brief data dict."""
+    logger = logging.getLogger("daily_brief")
+    try:
+        from services.brief_service import BriefService
+
+        brief_service = BriefService(config)
+        brief_data = brief_service.generate(macro_data=macro_data)
+
+        # Save brief JSON
+        if output_dir:
+            import json
+            brief_dir = output_dir / "brief"
+            brief_dir.mkdir(parents=True, exist_ok=True)
+
+            brief_path = brief_dir / "daily_brief.json"
+            with open(brief_path, 'w', encoding='utf-8') as f:
+                json.dump(brief_data, f, ensure_ascii=False, indent=2, default=str)
+            logger.info(f"Daily brief saved: {brief_path}")
+
+            # Also merge into web/latest.json if it exists
+            web_json_path = output_dir / "web" / "latest.json"
+            if web_json_path.exists():
+                try:
+                    with open(web_json_path, 'r', encoding='utf-8') as f:
+                        web_data = json.load(f)
+                    web_data['daily_brief'] = brief_data
+                    with open(web_json_path, 'w', encoding='utf-8') as f:
+                        json.dump(web_data, f, ensure_ascii=False, default=str)
+                    logger.info(f"Merged brief into {web_json_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to merge brief into web JSON: {e}")
+
+        return brief_data
+    except Exception as e:
+        logger.error(f"Daily brief generation failed: {e}", exc_info=True)
+        return {'status': 'error', 'error': str(e)}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Macro Liquidity Daily Monitor")
     parser.add_argument("--start", default="2024-01-01", help="Data start date (YYYY-MM-DD)")
@@ -122,6 +161,8 @@ def main():
     parser.add_argument("--no-report", action="store_true", help="Skip report generation")
     parser.add_argument("--clear-cache", action="store_true", help="Clear cache before run")
     parser.add_argument("--config", default="config.yaml", help="Config file path")
+    parser.add_argument("--no-brief", action="store_true", help="Skip daily brief generation")
+    parser.add_argument("--brief-only", action="store_true", help="Only run daily brief (skip macro pipeline)")
     args = parser.parse_args()
 
     # ---- Load Config ----
@@ -152,6 +193,13 @@ def main():
         if cache_dir.exists():
             shutil.rmtree(cache_dir)
             logger.info("Cache cleared")
+
+    # ---- Brief-only mode ----
+    if args.brief_only:
+        logger.info("Running daily brief only (skipping macro pipeline)...")
+        brief_data = run_daily_brief(config, macro_data=None, output_dir=output_dir)
+        logger.info("Brief-only run complete")
+        return
 
     # ---- Phase 1: Fetch Data ----
     logger.info("Phase 1: Fetching data...")
@@ -258,6 +306,22 @@ def main():
         dashboard_path = None
         logger.info("Phase 12: Dashboard skipped (no charts)")
 
+    # ---- Phase 13: Daily Brief ----
+    brief_data = None
+    if not args.no_brief:
+        logger.info("Phase 13: Generating daily brief...")
+        macro_context = {
+            'score': {
+                'composite': score_data.get('composite_score'),
+                'tier': score_data.get('tier'),
+                'tier_cn': score_data.get('tier_cn'),
+            },
+            'judgment': judgment,
+        }
+        brief_data = run_daily_brief(config, macro_data=macro_context, output_dir=output_dir)
+    else:
+        logger.info("Phase 13: Daily brief skipped (--no-brief)")
+
     # ---- Done ----
     logger.info("=" * 60)
     logger.info("RUN COMPLETE")
@@ -281,6 +345,8 @@ def main():
         print(f"  - daily_report.md")
     if dashboard_path:
         print(f"  - dashboard.html (open in browser)")
+    if brief_data and brief_data.get('status') != 'error':
+        print(f"  - brief/daily_brief.json (daily analysis)")
     print(f"{'='*50}\n")
 
 

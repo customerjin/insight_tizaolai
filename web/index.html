@@ -235,26 +235,37 @@ const PCT_IND=new Set(["spx","btc","usdjpy","dxy"]);
 // DAILY BRIEF COMPONENTS
 // ============================================================
 function BriefStatusBar({brief}){
-  const cls=({ok:"ok",partial:"partial",degraded:"partial"})[brief.status]||"error";
-  return(<div className="brief-status"><div className="brief-date">{brief.date||new Date().toLocaleDateString('zh-CN')}</div><div className="brief-update">更新于 {brief.update_time||"--:--"}</div><div className={`brief-badge ${cls}`}>{cls==="ok"?"✓":"⚠"} {brief.data_status||brief.status}</div></div>);
+  // Real validation: check actual data presence
+  const indices=brief.market?.indices||[];
+  const hasMarket=indices.some(i=>i.price!=null);
+  const hasMovers=(brief.movers?.gainers||[]).length>0||(brief.movers?.losers||[]).length>0;
+  const hasNews=(brief.news?.top5||brief.news?.events||[]).length>0;
+  const checks=[hasMarket,hasMovers,hasNews];
+  const okCount=checks.filter(Boolean).length;
+  let cls,label;
+  if(okCount===3){cls="ok";label="✓ 数据正常";}
+  else if(okCount>0){cls="partial";label="⚠ 部分数据可用 ("+okCount+"/3)";}
+  else{cls="error";label="✗ 数据获取失败";}
+  return(<div className="brief-status"><div className="brief-date">{brief.date||new Date().toLocaleDateString('zh-CN')}</div><div className="brief-update">更新于 {brief.update_time||"--:--"}</div><div className={`brief-badge ${cls}`}>{label}</div></div>);
 }
 
 function MarketCards({market}){
-  const indices=market?.indices||[];
-  if(!indices.length) return <div style={{color:"#475569",textAlign:"center",padding:30}}>行情数据加载中...</div>;
-  return(<div className="market-grid">{indices.map(idx=>(<div className="market-card" key={idx.symbol}><div className="market-card-header"><div className="market-card-name">{idx.name}</div><div className="market-card-status" style={{background:(idx.status_color||"#64748b")+"20",color:idx.status_color||"#64748b"}}>{idx.trading_status}</div></div><div className="market-card-price" style={{color:idx.change_color||"#e2e8f0"}}>{idx.price_display||"N/A"}</div><div className="market-card-change" style={{color:idx.change_color||"#94a3b8"}}>{idx.change_display||"N/A"}</div>{idx.day_range&&<div className="market-card-range">日内: {idx.day_range}</div>}</div>))}</div>);
+  const indices=(market?.indices||[]).filter(i=>i.price!=null);
+  if(!indices.length) return <div style={{color:"#475569",textAlign:"center",padding:30}}>行情数据暂不可用</div>;
+  return(<div className="market-grid">{indices.map(idx=>{const sc=idx.status_color||idx.trading_status_color||"#64748b";const dr=idx.day_range||idx.range_display;return(<div className="market-card" key={idx.symbol}><div className="market-card-header"><div className="market-card-name">{idx.name}</div><div className="market-card-status" style={{background:sc+"20",color:sc}}>{idx.trading_status}</div></div><div className="market-card-price" style={{color:idx.change_color||"#e2e8f0"}}>{idx.price_display||"N/A"}</div><div className="market-card-change" style={{color:idx.change_color||"#94a3b8"}}>{idx.change_display||"N/A"}</div>{dr&&<div className="market-card-range">日内: {dr}</div>}</div>);})}</div>);
 }
 
 function MoversPanel({movers}){
   const gainers=movers?.gainers||[]; const losers=movers?.losers||[];
-  const renderList=(items,type)=>(<div className="movers-panel"><div className={`movers-header ${type}`}>{type==="gainers"?"🔥 涨幅榜":"💧 跌幅榜"} ({items.length})</div>{items.length===0?(<div style={{padding:16,textAlign:"center",color:"#475569",fontSize:12}}>暂无显著异动 (阈值 ±3%)</div>):items.map((s,i)=>(<div className="mover-row" key={s.symbol}><div className="mover-rank">{i+1}</div><div className="mover-info"><div className="mover-name">{s.name}</div><div className="mover-code">{s.symbol} · {s.market}</div>{s.reason&&s.reason.text&&s.reason.text!=="暂无可靠原因"?(<div className="mover-reason">{s.reason.text}{s.reason.url&&<>{" · "}<a href={s.reason.url} target="_blank" rel="noopener">{s.reason.source||"来源"}</a></>}</div>):(<div className="mover-no-reason">暂无可靠原因</div>)}</div><div className="mover-change" style={{color:type==="gainers"?"#86efac":"#fca5a5"}}>{(s.change_pct||0)>0?"+":""}{(s.change_pct||0).toFixed(1)}%</div></div>))}</div>);
+  const getReason=(s)=>{const r=s.reason;if(!r)return{text:null,url:null};if(typeof r==="string")return{text:r!=="暂无可靠原因"?r:null,url:s.news_url||null,source:null};return{text:r.text&&r.text!=="暂无可靠原因"?r.text:null,url:r.url||null,source:r.source||null};};
+  const renderList=(items,type)=>(<div className="movers-panel"><div className={`movers-header ${type}`}>{type==="gainers"?"🔥 涨幅榜":"💧 跌幅榜"} ({items.length})</div>{items.length===0?(<div style={{padding:16,textAlign:"center",color:"#475569",fontSize:12}}>暂无显著异动 (阈值 ±3%)</div>):items.map((s,i)=>{const reason=getReason(s);return(<div className="mover-row" key={s.symbol}><div className="mover-rank">{i+1}</div><div className="mover-info"><div className="mover-name">{s.name}</div><div className="mover-code">{s.symbol} · {s.market}</div>{reason.text?(<div className="mover-reason">{reason.text}{reason.url&&<>{" · "}<a href={reason.url} target="_blank" rel="noopener">{reason.source||"来源"}</a></>}</div>):(<div className="mover-no-reason">暂无可靠原因</div>)}</div><div className="mover-change" style={{color:type==="gainers"?"#86efac":"#fca5a5"}}>{(s.change_pct||0)>0?"+":""}{(s.change_pct||0).toFixed(1)}%</div></div>);})}</div>);
   return(<div className="movers-grid">{renderList(gainers,"gainers")}{renderList(losers,"losers")}</div>);
 }
 
 function EventsList({news}){
-  const top5=news?.top5||[];
+  const top5=news?.top5||news?.events||[];
   if(!top5.length) return <div style={{color:"#475569",textAlign:"center",padding:20}}>暂无重要事件</div>;
-  return(<div className="event-list">{top5.map(evt=>(<div className="event-card" key={evt.rank}><div style={{display:"flex",alignItems:"flex-start"}}><span className="event-rank">{evt.rank}</span><div style={{flex:1}}><div className="event-title">{evt.title}</div>{evt.summary&&evt.summary!==evt.title&&<div className="event-summary">{evt.summary}</div>}<div className="event-meta">{(evt.impact_sectors||[]).map(s=><span className="event-tag" key={s}>{s}</span>)}<span className="event-time">{evt.published||""}</span>{evt.url&&<span className="event-source"><a href={evt.url} target="_blank" rel="noopener">{evt.source||"来源链接"}</a></span>}</div></div></div></div>))}</div>);
+  return(<div className="event-list">{top5.map((evt,i)=>(<div className="event-card" key={evt.rank||i}><div style={{display:"flex",alignItems:"flex-start"}}><span className="event-rank">{evt.rank||i+1}</span><div style={{flex:1}}><div className="event-title">{evt.title}</div>{evt.summary&&evt.summary!==evt.title&&<div className="event-summary">{evt.summary}</div>}<div className="event-meta">{(evt.impact_sectors||[]).map(s=><span className="event-tag" key={s}>{s}</span>)}<span className="event-time">{evt.published||evt.time||""}</span>{evt.url&&<span className="event-source"><a href={evt.url} target="_blank" rel="noopener">{evt.source||"来源链接"}</a></span>}</div></div></div></div>))}</div>);
 }
 
 function CommentaryBox({analysis}){
@@ -266,7 +277,7 @@ function OutlookPanel({analysis}){
   const outlook=analysis?.outlook||[];
   if(!outlook.length) return <div style={{color:"#475569",textAlign:"center",padding:20}}>暂无投资动向分析</div>;
   const dirClass=d=>{if(d?.includes("多"))return"bullish";if(d?.includes("空"))return"bearish";return"neutral";};
-  return(<div className="outlook-grid">{outlook.map((o,i)=>(<div className="outlook-card" key={i}><div className="outlook-header"><div className="outlook-sector">{o.sector}</div><div className={`outlook-dir ${dirClass(o.direction)}`}>{o.direction}</div></div><div className="outlook-body"><div className="outlook-logic">{(o.logic||[]).map((l,j)=><div key={j}>• {l}</div>)}</div>{o.watch_stocks?.length>0&&<div className="outlook-stocks">{o.watch_stocks.map(s=><span className="outlook-stock-tag" key={s}>{s}</span>)}</div>}<div className="outlook-detail"><div className="outlook-detail-box"><div className="outlook-detail-label">触发条件</div>{o.trigger||"待观察"}</div><div className="outlook-detail-box"><div className="outlook-detail-label">风险点</div>{o.risk||"暂无"}</div></div></div></div>))}</div>);
+  return(<div className="outlook-grid">{outlook.map((o,i)=>{const sector=o.sector||o.asset||"未知";const logic=o.logic||(o.reason?[o.reason]:[]);return(<div className="outlook-card" key={i}><div className="outlook-header"><div className="outlook-sector">{sector}</div><div className={`outlook-dir ${dirClass(o.direction)}`}>{o.direction}</div></div><div className="outlook-body"><div className="outlook-logic">{logic.map((l,j)=><div key={j}>• {l}</div>)}</div>{o.watch_stocks?.length>0&&<div className="outlook-stocks">{o.watch_stocks.map(s=><span className="outlook-stock-tag" key={s}>{s}</span>)}</div>}<div className="outlook-detail"><div className="outlook-detail-box"><div className="outlook-detail-label">触发条件</div>{o.trigger||"待观察"}</div><div className="outlook-detail-box"><div className="outlook-detail-label">风险点</div>{o.risk||"暂无"}</div></div></div></div>);})}</div>);
 }
 
 function DailyBriefTab({brief}){

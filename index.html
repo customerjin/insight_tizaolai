@@ -31,6 +31,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC
 .header-meta{font-size:12px;color:#64748b}
 .header-badge{display:inline-block;padding:2px 10px;background:#1e293b;border-radius:6px;font-size:11px;color:#94a3b8;margin-left:8px}
 
+/* ========== BRIEF HERO ========== */
+.brief-hero{background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#172554 100%);border:1px solid #334155;border-radius:16px;padding:32px 28px;margin-bottom:24px;position:relative;overflow:hidden}
+.brief-hero::before{content:"";position:absolute;top:-40%;right:-10%;width:300px;height:300px;background:radial-gradient(circle,rgba(59,130,246,0.08) 0%,transparent 70%);border-radius:50%}
+.brief-hero-title{font-size:26px;font-weight:800;color:#f1f5f9;margin-bottom:6px;letter-spacing:-0.5px;position:relative}
+.brief-hero-sub{font-size:13px;color:#94a3b8;margin-bottom:18px;line-height:1.6;position:relative}
+.brief-hero-features{display:flex;flex-wrap:wrap;gap:8px;position:relative}
+.brief-hero-tag{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:8px;font-size:11px;color:#cbd5e1;font-weight:500;transition:border-color .2s}
+.brief-hero-tag:hover{border-color:rgba(59,130,246,0.3)}
+
 /* ========== DAILY BRIEF STYLES ========== */
 .brief-status{display:flex;align-items:center;gap:16px;padding:12px 20px;background:#1e293b;border:1px solid #334155;border-radius:12px;margin-bottom:20px;flex-wrap:wrap}
 .brief-date{font-size:16px;font-weight:700;color:#f1f5f9}
@@ -280,9 +289,14 @@ function OutlookPanel({analysis}){
   return(<div className="outlook-grid">{outlook.map((o,i)=>{const sector=o.sector||o.asset||"未知";const logic=o.logic||(o.reason?[o.reason]:[]);return(<div className="outlook-card" key={i}><div className="outlook-header"><div className="outlook-sector">{sector}</div><div className={`outlook-dir ${dirClass(o.direction)}`}>{o.direction}</div></div><div className="outlook-body"><div className="outlook-logic">{logic.map((l,j)=><div key={j}>• {l}</div>)}</div>{o.watch_stocks?.length>0&&<div className="outlook-stocks">{o.watch_stocks.map(s=><span className="outlook-stock-tag" key={s}>{s}</span>)}</div>}<div className="outlook-detail"><div className="outlook-detail-box"><div className="outlook-detail-label">触发条件</div>{o.trigger||"待观察"}</div><div className="outlook-detail-box"><div className="outlook-detail-label">风险点</div>{o.risk||"暂无"}</div></div></div></div>);})}</div>);
 }
 
+function BriefHero(){
+  return(<div className="brief-hero"><div className="brief-hero-title">Insight · 每日投研简报</div><div className="brief-hero-sub">自动聚合全球市场行情、明星股异动、热点事件与 AI 解读，每天 8:00 更新，助你快速掌握投资脉搏。</div><div className="brief-hero-features"><span className="brief-hero-tag">📈 五大指数实时行情</span><span className="brief-hero-tag">🔥 明星股涨跌追踪</span><span className="brief-hero-tag">📰 Top 5 投资事件</span><span className="brief-hero-tag">🤖 AI 行情解读</span><span className="brief-hero-tag">🧭 投资方向建议</span><span className="brief-hero-tag">📊 宏观流动性评分</span></div></div>);
+}
+
 function DailyBriefTab({brief}){
-  if(!brief||brief.status==='unavailable') return(<div style={{textAlign:"center",padding:"60px 20px",color:"#64748b"}}><div style={{fontSize:48,marginBottom:16}}>📊</div><div style={{fontSize:16,marginBottom:8}}>每日分析数据暂未生成</div><div style={{fontSize:12}}>请运行 <code style={{color:"#60a5fa"}}>python run_daily.py</code> 生成最新数据</div></div>);
+  if(!brief||brief.status==='unavailable') return(<div><BriefHero/><div style={{textAlign:"center",padding:"60px 20px",color:"#64748b"}}><div style={{fontSize:48,marginBottom:16}}>📊</div><div style={{fontSize:16,marginBottom:8}}>每日分析数据暂未生成</div><div style={{fontSize:12}}>请运行 <code style={{color:"#60a5fa"}}>python run_daily.py</code> 生成最新数据</div></div></div>);
   return(<div>
+    <BriefHero/>
     <BriefStatusBar brief={brief}/>
     <div className="brief-section"><div className="brief-section-title"><span className="brief-section-icon">📈</span> 主要市场表现</div><MarketCards market={brief.market}/></div>
     <div className="brief-section"><div className="brief-section-title"><span className="brief-section-icon">🔥</span> 明星股异动</div><MoversPanel movers={brief.movers}/></div>

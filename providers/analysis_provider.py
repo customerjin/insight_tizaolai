@@ -27,9 +27,25 @@ class AnalysisProvider(BaseProvider):
 
         super().__init__(config, cache_dir=f"{cache_dir}/brief/analysis", cache_ttl=cache_ttl)
 
-        self.provider = analysis_cfg.get('provider', 'none')
         self.api_key = analysis_cfg.get('api_key', '') or os.environ.get('ANALYSIS_API_KEY', '')
-        self.model = analysis_cfg.get('model', 'gpt-4o-mini')
+        self.model = analysis_cfg.get('model', 'google/gemini-2.0-flash-001')
+        self.base_url = analysis_cfg.get('base_url', 'https://openrouter.ai/api/v1')
+
+        # Auto-detect provider from key/config
+        configured_provider = analysis_cfg.get('provider', 'none')
+        if configured_provider != 'none':
+            self.provider = configured_provider
+        elif self.api_key.startswith('sk-or-'):
+            self.provider = 'openrouter'
+        elif self.api_key.startswith('sk-ant-'):
+            self.provider = 'anthropic'
+        elif self.api_key:
+            self.provider = 'openai'
+        else:
+            self.provider = 'none'
+
+        if self.provider != 'none':
+            logger.info(f"Analysis provider: {self.provider} (model: {self.model})")
 
     def generate_commentary(self, market_data: dict, news_data: dict,
                            movers_data: dict, macro_data: dict = None) -> dict:
@@ -44,11 +60,11 @@ class AnalysisProvider(BaseProvider):
 
         Returns: {commentary, outlook, status}
         """
-        if self.provider == 'openai' and self.api_key:
+        if self.provider in ('openrouter', 'openai') and self.api_key:
             try:
-                return self._generate_with_openai(market_data, news_data, movers_data, macro_data)
+                return self._generate_with_openai_compatible(market_data, news_data, movers_data, macro_data)
             except Exception as e:
-                logger.warning(f"OpenAI generation failed: {e}, falling back to rules")
+                logger.warning(f"{self.provider} generation failed: {e}, falling back to rules")
 
         if self.provider == 'anthropic' and self.api_key:
             try:
@@ -133,18 +149,30 @@ class AnalysisProvider(BaseProvider):
 
         return prompt
 
-    def _generate_with_openai(self, market_data, news_data, movers_data, macro_data) -> dict:
-        """Generate analysis using OpenAI API."""
+    def _generate_with_openai_compatible(self, market_data, news_data, movers_data, macro_data) -> dict:
+        """Generate analysis using OpenAI-compatible API (OpenRouter, OpenAI, etc)."""
         import requests as req
 
         prompt = self._build_prompt(market_data, news_data, movers_data, macro_data or {})
 
+        # Determine API URL
+        if self.provider == 'openrouter':
+            url = f"{self.base_url}/chat/completions"
+        else:
+            url = "https://api.openai.com/v1/chat/completions"
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        # OpenRouter requires HTTP-Referer
+        if self.provider == 'openrouter':
+            headers["HTTP-Referer"] = "https://invest-wine.vercel.app"
+            headers["X-Title"] = "Macro Liquidity Daily Brief"
+
         resp = req.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
+            url,
+            headers=headers,
             json={
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
@@ -156,10 +184,9 @@ class AnalysisProvider(BaseProvider):
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"]
 
-        # Parse JSON from response
         parsed = self._parse_json_response(content)
         parsed['status'] = 'ok'
-        parsed['source'] = f'openai:{self.model}'
+        parsed['source'] = f'{self.provider}:{self.model}'
         parsed['raw_prompt'] = prompt
         parsed['raw_response'] = content
         return parsed

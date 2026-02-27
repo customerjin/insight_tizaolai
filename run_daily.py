@@ -148,6 +148,14 @@ def run_daily_brief(config: dict, macro_data: dict = None, output_dir: Path = No
                 except Exception as e:
                     logger.warning(f"Failed to merge brief into web JSON: {e}")
 
+            # Auto-copy to data/latest.json for Vercel deployment
+            deploy_path = PROJECT_ROOT / "data" / "latest.json"
+            deploy_path.parent.mkdir(parents=True, exist_ok=True)
+            if web_json_path.exists():
+                import shutil
+                shutil.copy2(web_json_path, deploy_path)
+                logger.info(f"Auto-copied to {deploy_path}")
+
         return brief_data
     except Exception as e:
         logger.error(f"Daily brief generation failed: {e}", exc_info=True)
@@ -295,6 +303,15 @@ def main():
     exporter = WebExporter(config)
     exporter.export(summary, score_data)
 
+    # ---- Auto-copy to data/ for Vercel ----
+    deploy_path = PROJECT_ROOT / "data" / "latest.json"
+    deploy_path.parent.mkdir(parents=True, exist_ok=True)
+    web_json_path = output_dir / "web" / "latest.json"
+    if web_json_path.exists():
+        import shutil
+        shutil.copy2(web_json_path, deploy_path)
+        logger.info(f"Auto-copied to {deploy_path}")
+
     # ---- Phase 12: HTML Dashboard ----
     if not args.no_charts:
         logger.info("Phase 12: Generating HTML dashboard...")
@@ -350,5 +367,93 @@ def main():
     print(f"{'='*50}\n")
 
 
+def verify_output():
+    """Auto-verify data/latest.json before pushing."""
+    import json
+    deploy_path = PROJECT_ROOT / "data" / "latest.json"
+    if not deploy_path.exists():
+        print("\n❌ VERIFY FAILED: data/latest.json not found!")
+        return False
+
+    with open(deploy_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    issues = []
+    ok_items = []
+
+    # Check macro data
+    if data.get('score', {}).get('composite') is not None:
+        ok_items.append(f"✅ 宏观评分: {data['score']['composite']}")
+    else:
+        issues.append("⚠️  宏观评分: 无数据")
+
+    # Check daily brief
+    brief = data.get('daily_brief')
+    if not brief:
+        issues.append("❌ daily_brief: 不存在")
+    else:
+        # Market indices
+        indices = brief.get('market', {}).get('indices', [])
+        real_prices = [i for i in indices if i.get('price') is not None]
+        if len(real_prices) == len(indices) and indices:
+            ok_items.append(f"✅ 行情指数: {len(real_prices)}/{len(indices)} 有数据")
+        elif real_prices:
+            issues.append(f"⚠️  行情指数: 仅 {len(real_prices)}/{len(indices)} 有数据")
+        else:
+            issues.append(f"❌ 行情指数: 全部为空 (0/{len(indices)})")
+
+        # Movers
+        gainers = len(brief.get('movers', {}).get('gainers', []))
+        losers = len(brief.get('movers', {}).get('losers', []))
+        if gainers + losers > 0:
+            ok_items.append(f"✅ 明星股异动: {gainers}涨 {losers}跌")
+        else:
+            issues.append("⚠️  明星股异动: 无数据 (可能无超阈值个股)")
+
+        # News
+        events = brief.get('news', {}).get('top5', brief.get('news', {}).get('events', []))
+        if events:
+            ok_items.append(f"✅ 新闻事件: {len(events)} 条")
+        else:
+            issues.append("❌ 新闻事件: 无数据")
+
+        # Analysis
+        commentary = brief.get('analysis', {}).get('commentary', {})
+        if commentary.get('main_theme'):
+            src = brief.get('analysis', {}).get('source', 'unknown')
+            ok_items.append(f"✅ AI分析: 有内容 (来源: {src})")
+        else:
+            issues.append("❌ AI分析: 无内容")
+
+        # Outlook
+        outlook = brief.get('analysis', {}).get('outlook', [])
+        if outlook:
+            ok_items.append(f"✅ 投资展望: {len(outlook)} 条")
+        else:
+            issues.append("⚠️  投资展望: 无数据")
+
+    # Print report
+    print(f"\n{'='*50}")
+    print("  📋 数据自检报告")
+    print(f"{'='*50}")
+    for item in ok_items:
+        print(f"  {item}")
+    for item in issues:
+        print(f"  {item}")
+    print(f"{'='*50}")
+
+    has_critical = any(item.startswith("❌") for item in issues)
+    if has_critical:
+        print("  ⛔ 存在严重数据缺失，建议修复后再推送")
+    elif issues:
+        print("  ⚠️  部分数据缺失，可推送但建议关注")
+    else:
+        print("  ✅ 全部数据正常，可以推送")
+    print(f"{'='*50}\n")
+
+    return not has_critical
+
+
 if __name__ == "__main__":
     main()
+    verify_output()

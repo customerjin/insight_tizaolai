@@ -1,18 +1,13 @@
 """
 services/movers_service.py - Star stock movers detection and reason attribution.
 
-Identifies top gainers/losers across US, HK, and CN markets
-and attributes reasons from news sources.
+Uses yfinance for reliable data fetching across US, HK, and CN markets.
 """
 
 import logging
 import time
 from datetime import datetime
 from typing import Dict, List, Optional
-
-import requests
-
-from providers.base import USER_AGENT
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +63,6 @@ STAR_STOCKS = {
     ],
 }
 
-YAHOO_CHART = "https://query2.finance.yahoo.com/v8/finance/chart"
-
 
 class MoversService:
     """Detects star stock movers and attributes reasons."""
@@ -82,53 +75,97 @@ class MoversService:
         self.markets = movers_cfg.get('markets', ['US', 'HK', 'CN'])
         self.top_n = movers_cfg.get('top_n', 10)
         self.min_change = movers_cfg.get('min_change_pct', 3.0)
-        self._session = None
-        self._crumb = None
-
-    def _get_session(self):
-        if self._session is not None:
-            return self._session, self._crumb
-
-        self._session = requests.Session()
-        self._session.headers.update({"User-Agent": USER_AGENT})
-        try:
-            self._session.get("https://fc.yahoo.com", timeout=10)
-            crumb_resp = self._session.get(
-                "https://query2.finance.yahoo.com/v1/test/getcrumb", timeout=10
-            )
-            if crumb_resp.status_code == 200 and crumb_resp.text:
-                self._crumb = crumb_resp.text
-        except Exception:
-            self._crumb = None
-        return self._session, self._crumb
 
     def detect_movers(self) -> dict:
-        """
-        Detect top gainers and losers from star stock lists.
-        Returns: {gainers: [...], losers: [...], status, timestamp}
-        """
-        all_stocks = []
+        """Detect top gainers and losers from star stock lists."""
+        try:
+            import yfinance as yf
+        except ImportError:
+            logger.error("yfinance not installed")
+            return {
+                'gainers': [], 'losers': [],
+                'status': 'error',
+                'error': 'yfinance 未安装，请运行: pip3 install yfinance --break-system-packages',
+                'timestamp': datetime.now().isoformat(),
+            }
 
-        session, crumb = self._get_session()
+        all_stocks = []
 
         for market in self.markets:
             stocks = STAR_STOCKS.get(market, [])
-            for stock in stocks:
-                try:
-                    data = self._fetch_stock_data(stock['symbol'], session, crumb)
-                    if data and data.get('change_pct') is not None:
-                        data['name'] = stock['name']
-                        data['market'] = market
-                        all_stocks.append(data)
-                except Exception as e:
-                    logger.debug(f"Failed to fetch {stock['symbol']}: {e}")
-                time.sleep(0.1)  # Rate limiting
+            symbols = [s['symbol'] for s in stocks]
+            name_map = {s['symbol']: s['name'] for s in stocks}
+
+            try:
+                # Batch download per market
+                data = yf.download(symbols, period="5d", interval="1d",
+                                   group_by='ticker', progress=False, threads=True)
+
+                for stock_cfg in stocks:
+                    sym = stock_cfg['symbol']
+                    try:
+                        if len(symbols) == 1:
+                            df = data
+                        else:
+                            df = data[sym] if sym in data.columns.get_level_values(0) else None
+
+                        if df is None or df.empty:
+                            continue
+
+                        closes = df['Close'].dropna()
+                        if len(closes) < 2:
+                            continue
+
+                        latest = float(closes.iloc[-1])
+                        prev = float(closes.iloc[-2])
+                        if prev == 0:
+                            continue
+
+                        change_pct = round(((latest - prev) / prev) * 100, 2)
+
+                        all_stocks.append({
+                            'symbol': sym,
+                            'name': name_map[sym],
+                            'market': market,
+                            'price': round(latest, 2),
+                            'change_pct': change_pct,
+                            'change_abs': round(latest - prev, 2),
+                            'prev_close': round(prev, 2),
+                        })
+                    except Exception as e:
+                        logger.debug(f"Failed to parse {sym}: {e}")
+
+            except Exception as e:
+                logger.warning(f"Batch download failed for {market}: {e}")
+                # Try individual downloads
+                for stock_cfg in stocks:
+                    try:
+                        ticker = yf.Ticker(stock_cfg['symbol'])
+                        hist = ticker.history(period="5d")
+                        if hist.empty or len(hist) < 2:
+                            continue
+                        latest = float(hist['Close'].iloc[-1])
+                        prev = float(hist['Close'].iloc[-2])
+                        if prev == 0:
+                            continue
+                        change_pct = round(((latest - prev) / prev) * 100, 2)
+                        all_stocks.append({
+                            'symbol': stock_cfg['symbol'],
+                            'name': stock_cfg['name'],
+                            'market': market,
+                            'price': round(latest, 2),
+                            'change_pct': change_pct,
+                            'change_abs': round(latest - prev, 2),
+                            'prev_close': round(prev, 2),
+                        })
+                    except Exception as e2:
+                        logger.debug(f"Individual failed {stock_cfg['symbol']}: {e2}")
 
         if not all_stocks:
             return {
-                'gainers': [],
-                'losers': [],
+                'gainers': [], 'losers': [],
                 'status': 'error',
+                'error': 'Yahoo Finance 无法获取任何股票数据，请检查网络连接',
                 'timestamp': datetime.now().isoformat(),
             }
 
@@ -153,62 +190,6 @@ class MoversService:
             'status': 'ok',
             'timestamp': datetime.now().isoformat(),
         }
-
-    def _fetch_stock_data(self, symbol: str, session, crumb) -> Optional[dict]:
-        """Fetch latest price and change for a single stock."""
-        url = f"{YAHOO_CHART}/{symbol}"
-        params = {"range": "5d", "interval": "1d", "includePrePost": "false"}
-        if crumb:
-            params["crumb"] = crumb
-
-        try:
-            resp = session.get(url, params=params, timeout=10)
-            if resp.status_code != 200:
-                return None
-        except Exception:
-            return None
-
-        try:
-            data = resp.json()
-            result = data["chart"]["result"][0]
-            meta = result.get("meta", {})
-            quote = result["indicators"]["quote"][0]
-            closes = quote.get("close", [])
-            volumes = quote.get("volume", [])
-
-            # Find latest valid close
-            latest_close = None
-            prev_close = None
-            latest_vol = None
-
-            for i in range(len(closes) - 1, -1, -1):
-                if closes[i] is not None:
-                    if latest_close is None:
-                        latest_close = closes[i]
-                        latest_vol = volumes[i] if i < len(volumes) else None
-                    elif prev_close is None:
-                        prev_close = closes[i]
-                        break
-
-            if prev_close is None:
-                prev_close = meta.get("chartPreviousClose") or meta.get("previousClose")
-
-            if latest_close is None or prev_close is None or prev_close == 0:
-                return None
-
-            change_pct = ((latest_close - prev_close) / prev_close) * 100
-
-            return {
-                'symbol': symbol,
-                'price': round(latest_close, 2),
-                'change_pct': round(change_pct, 2),
-                'change_abs': round(latest_close - prev_close, 2),
-                'volume': latest_vol,
-                'prev_close': round(prev_close, 2),
-            }
-        except Exception as e:
-            logger.debug(f"Parse error for {symbol}: {e}")
-            return None
 
     def _find_reason(self, stock: dict) -> dict:
         """Find reason for stock movement from news."""

@@ -8,7 +8,7 @@ numpy>=1.23
 # Optional (for better YAML parsing)
 pyyaml>=6.0
 
-# Note: Daily Brief module uses only stdlib + requests (no extra deps)
-# - News: xml.etree.ElementTree (stdlib)
-# - Timezone: zoneinfo (stdlib, Python 3.9+)
-# - Dedup: difflib (stdlib)
+# Daily Brief module
+yfinance>=0.2.30
+
+# Note: News/Analysis use stdlib (xml.etree, zoneinfo, difflib)

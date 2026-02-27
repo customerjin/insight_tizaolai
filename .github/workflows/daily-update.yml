@@ -27,7 +27,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas numpy matplotlib requests pyyaml
+          pip install pandas numpy matplotlib requests pyyaml yfinance
 
       - name: Run pipeline
         env:

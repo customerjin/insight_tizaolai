@@ -197,6 +197,47 @@ tr:hover{background:rgba(255,255,255,0.02)}
 .footer{text-align:center;padding:24px 0;font-size:11px;color:#475569;border-top:1px solid #1e293b;margin-top:32px}
 .note{font-size:11px;color:#475569;padding:8px 12px;background:#0f172a;border-radius:6px;margin-top:8px;line-height:1.6}
 
+/* ========== FORWARD ANALYSIS ========== */
+.fwd-panel{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:20px 24px;margin-bottom:20px}
+.fwd-title{font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:4px}
+.fwd-subtitle{font-size:11px;color:#64748b;margin-bottom:16px}
+.fwd-empty{color:#475569;font-size:13px;padding:16px 0}
+.fwd-empty-section .fwd-panel{margin-top:0}
+
+.trend-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.trend-card{background:#0f172a;border-radius:10px;padding:12px 16px;border:1px solid #1e293b}
+.trend-name{font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:6px}
+.trend-dir{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.trend-label{font-size:12px}
+.trend-nums{font-size:11px;color:#94a3b8;margin-bottom:2px}
+.trend-verdict{font-size:11px;font-weight:600}
+
+.sim-badge{background:#334155;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.analogue-stats{margin-top:16px;padding:16px;background:#0f172a;border-radius:10px;border:1px solid #1e293b}
+.stat-row{display:flex;align-items:center;gap:12px;padding:6px 0;font-size:13px;color:#cbd5e1}
+.stat-label{font-weight:700;min-width:120px}
+.stat-val{color:#94a3b8}
+
+.fwd-signal-hero{display:flex;gap:32px;background:#1e293b;border:2px solid #334155;border-radius:16px;padding:24px 32px;margin-bottom:20px;flex-wrap:wrap}
+.fwd-signal-left{text-align:center;min-width:160px}
+.fwd-signal-label{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.fwd-signal-score{font-size:56px;font-weight:900;line-height:1.1}
+.fwd-signal-bias{display:inline-block;padding:4px 16px;border-radius:20px;font-size:14px;font-weight:700;margin-top:8px}
+.fwd-signal-right{flex:1;min-width:280px}
+.fwd-comp{display:flex;flex-direction:column;gap:8px}
+.fwd-comp-item{display:flex;align-items:center;gap:10px}
+.fwd-comp-label{font-size:12px;color:#94a3b8;min-width:70px}
+.fwd-comp-bar{flex:1;height:8px;background:#0f172a;border-radius:4px;overflow:hidden}
+.fwd-comp-bar div{height:100%;border-radius:4px;transition:width .3s}
+.fwd-comp-val{font-size:13px;font-weight:700;color:#cbd5e1;min-width:28px;text-align:right}
+.regime-probs{display:flex;gap:16px;font-size:12px;font-weight:600}
+.regime-prob{padding:4px 12px;background:#0f172a;border-radius:8px}
+
+.fwd-narrative{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:24px 28px;margin-bottom:20px}
+.narrative-body{margin-top:12px}
+.narrative-para{font-size:14px;line-height:1.8;color:#cbd5e1;margin-bottom:12px;text-indent:2em}
+.narrative-disclaimer{font-size:11px;color:#475569;margin-top:16px;padding-top:12px;border-top:1px solid #1e293b}
+
 @media(max-width:768px){
   .score-hero{padding:20px}
   .score-left{flex:0 0 auto;width:100%}
@@ -345,6 +386,124 @@ function IndicatorSection({secKey,idx,readings,changes,charts}){const kb=KNOWLED
 
 function QualityTable({quality}){return(<div className="quality"><table><thead><tr><th>指标</th><th>状态</th><th>覆盖率</th><th>滞后(天)</th><th>最后有效日</th></tr></thead><tbody>{Object.entries(quality).filter(([k,v])=>typeof v==="object").map(([k,v])=>(<tr key={k}><td>{k}</td><td><span style={{color:v.status==="ok"?"#86efac":"#fcd34d"}}>●</span> {v.status}</td><td>{Math.round((v.coverage||0)*100)}%</td><td>{v.stale_days||0}</td><td>{v.last_valid||"N/A"}</td></tr>))}</tbody></table></div>);}
 
+// ============================================================
+// FORWARD ANALYSIS COMPONENTS (前瞻性分析)
+// ============================================================
+const FWD_IND_NAME={"net_liquidity":"净流动性","vix":"VIX","hy_oas":"高收益利差","sofr":"SOFR","dxy":"美元指数","carry_spread_bps":"套息利差","curve_slope_bps":"曲线斜率","on_rrp":"逆回购"};
+
+function TrendArrow({dir,momentum,improving}){
+  const arrows={"rising":"↑","falling":"↓","sideways":"→"};
+  const colors={true:"#22c55e",false:"#ef4444"};
+  const momentumIcon=momentum==="accelerating"?"⚡":momentum==="decelerating"?"🔻":"➖";
+  return(<span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+    <span style={{fontSize:18,color:colors[improving]}}>{arrows[dir]||"→"}</span>
+    <span style={{fontSize:11}} title={`动量: ${momentum}`}>{momentumIcon}</span>
+  </span>);
+}
+
+function TrendPanel({trends}){
+  if(!trends||!Object.keys(trends).length) return null;
+  const entries=Object.entries(trends).sort((a,b)=>Math.abs(b[1].chg_5d_pct)-Math.abs(a[1].chg_5d_pct));
+  return(<div className="fwd-panel">
+    <div className="fwd-title">📊 指标趋势动量</div>
+    <div className="fwd-subtitle">方向 + 速度变化 + 是否有利风险资产</div>
+    <div className="trend-grid">
+      {entries.map(([k,t])=>(<div className="trend-card" key={k} style={{borderLeft:`3px solid ${t.is_improving?"#22c55e":"#ef4444"}`}}>
+        <div className="trend-name">{FWD_IND_NAME[k]||k}</div>
+        <div className="trend-dir">
+          <TrendArrow dir={t.direction} momentum={t.momentum_signal} improving={t.is_improving}/>
+          <span className="trend-label" style={{color:t.is_improving?"#86efac":"#fca5a5"}}>{t.direction_cn} · {t.momentum_signal_cn}</span>
+        </div>
+        <div className="trend-nums">
+          <span style={{color:t.chg_5d_pct>0?"#86efac":t.chg_5d_pct<0?"#fca5a5":"#94a3b8"}}>5日 {t.chg_5d_pct>0?"+":""}{t.chg_5d_pct}%</span>
+          <span style={{color:t.chg_20d_pct>0?"#86efac":t.chg_20d_pct<0?"#fca5a5":"#94a3b8",marginLeft:12}}>20日 {t.chg_20d_pct>0?"+":""}{t.chg_20d_pct}%</span>
+        </div>
+        <div className="trend-verdict" style={{color:t.is_improving?"#86efac":"#fca5a5"}}>{t.is_improving_cn}</div>
+      </div>))}
+    </div>
+  </div>);
+}
+
+function AnalogueTable({analogues,fwdStats}){
+  if(!analogues||!analogues.length) return(<div className="fwd-panel"><div className="fwd-title">🔍 历史类比</div><div className="fwd-empty">历史数据不足，暂无可比较的类似环境</div></div>);
+  return(<div className="fwd-panel">
+    <div className="fwd-title">🔍 历史类比 — 相似宏观环境下市场表现</div>
+    <div className="fwd-subtitle">基于各指标Z-Score向量余弦相似度匹配 | 相似度≥0.7</div>
+    <div className="table-wrap" style={{marginTop:12}}>
+      <table>
+        <thead><tr><th>日期</th><th style={{textAlign:"center"}}>相似度</th><th style={{textAlign:"right"}}>SPX +5日</th><th style={{textAlign:"right"}}>SPX +20日</th><th style={{textAlign:"right"}}>BTC +5日</th><th style={{textAlign:"right"}}>BTC +20日</th></tr></thead>
+        <tbody>
+          {analogues.slice(0,8).map((a,i)=>(<tr key={i}>
+            <td style={{fontWeight:600}}>{a.date}</td>
+            <td style={{textAlign:"center"}}><span className="sim-badge">{(a.similarity*100).toFixed(0)}%</span></td>
+            <td className="num" style={{color:a.spx_fwd_5d>0?"#86efac":a.spx_fwd_5d<0?"#fca5a5":"#94a3b8"}}>{a.spx_fwd_5d!=null?(a.spx_fwd_5d>0?"+":"")+a.spx_fwd_5d+"%":"N/A"}</td>
+            <td className="num" style={{color:a.spx_fwd_20d>0?"#86efac":a.spx_fwd_20d<0?"#fca5a5":"#94a3b8",fontWeight:700}}>{a.spx_fwd_20d!=null?(a.spx_fwd_20d>0?"+":"")+a.spx_fwd_20d+"%":"N/A"}</td>
+            <td className="num" style={{color:a.btc_fwd_5d>0?"#86efac":a.btc_fwd_5d<0?"#fca5a5":"#94a3b8"}}>{a.btc_fwd_5d!=null?(a.btc_fwd_5d>0?"+":"")+a.btc_fwd_5d+"%":"N/A"}</td>
+            <td className="num" style={{color:a.btc_fwd_20d>0?"#86efac":a.btc_fwd_20d<0?"#fca5a5":"#94a3b8",fontWeight:700}}>{a.btc_fwd_20d!=null?(a.btc_fwd_20d>0?"+":"")+a.btc_fwd_20d+"%":"N/A"}</td>
+          </tr>))}
+        </tbody>
+      </table>
+    </div>
+    {fwdStats&&fwdStats.n_analogues>0&&(<div className="analogue-stats">
+      <div className="stat-row"><span className="stat-label">📈 SPX 20日预期</span><span className="stat-val">中位数 <b style={{color:fwdStats.spx_median_20d>0?"#86efac":"#fca5a5"}}>{fwdStats.spx_median_20d>0?"+":""}{fwdStats.spx_median_20d}%</b>　区间 [{fwdStats.spx_p25_20d}%, {fwdStats.spx_p75_20d}%]　胜率 {fwdStats.win_rate_spx_20d!=null?Math.round(fwdStats.win_rate_spx_20d*100)+"%":"N/A"}</span></div>
+      <div className="stat-row"><span className="stat-label">₿ BTC 20日预期</span><span className="stat-val">中位数 <b style={{color:fwdStats.btc_median_20d>0?"#86efac":"#fca5a5"}}>{fwdStats.btc_median_20d>0?"+":""}{fwdStats.btc_median_20d}%</b>　区间 [{fwdStats.btc_p25_20d}%, {fwdStats.btc_p75_20d}%]　胜率 {fwdStats.win_rate_btc_20d!=null?Math.round(fwdStats.win_rate_btc_20d*100)+"%":"N/A"}</span></div>
+    </div>)}
+  </div>);
+}
+
+function ForwardSignalHero({signal,regime}){
+  if(!signal) return null;
+  const biasColors={"bullish":"#22c55e","mild_bull":"#86efac","neutral":"#eab308","mild_bear":"#fca5a5","bearish":"#ef4444"};
+  const color=biasColors[signal.bias]||"#94a3b8";
+  return(<div className="fwd-signal-hero" style={{borderColor:color}}>
+    <div className="fwd-signal-left">
+      <div className="fwd-signal-label">前瞻综合信号</div>
+      <div className="fwd-signal-score" style={{color}}>{Math.round(signal.score)}</div>
+      <div className="fwd-signal-bias" style={{background:color+"20",color,border:`1px solid ${color}`}}>{signal.bias_cn}</div>
+      <div className="fwd-signal-detail" style={{marginTop:8,fontSize:12,color:"#94a3b8"}}>
+        当前评分×40% + 趋势动量×30% + 历史类比×30%
+      </div>
+    </div>
+    <div className="fwd-signal-right">
+      <div className="fwd-comp">
+        <div className="fwd-comp-item"><span className="fwd-comp-label">当前评分</span><div className="fwd-comp-bar"><div style={{width:`${signal.components.current_score}%`,background:"#3b82f6"}}/></div><span className="fwd-comp-val">{Math.round(signal.components.current_score)}</span></div>
+        <div className="fwd-comp-item"><span className="fwd-comp-label">趋势动量</span><div className="fwd-comp-bar"><div style={{width:`${signal.components.momentum_score}%`,background:signal.components.momentum_score>=50?"#22c55e":"#ef4444"}}/></div><span className="fwd-comp-val">{Math.round(signal.components.momentum_score)}</span></div>
+        <div className="fwd-comp-item"><span className="fwd-comp-label">历史类比</span><div className="fwd-comp-bar"><div style={{width:`${signal.components.historical_score}%`,background:signal.components.historical_score>=50?"#22c55e":"#ef4444"}}/></div><span className="fwd-comp-val">{Math.round(signal.components.historical_score)}</span></div>
+      </div>
+      <div style={{marginTop:12,fontSize:12,color:"#94a3b8"}}>{signal.improving_count}/{signal.total_indicators} 个指标边际改善中</div>
+      {regime&&(<div className="regime-probs" style={{marginTop:12}}>
+        <span className="regime-prob" style={{color:"#ef4444"}}>恶化 {Math.round(regime.worsen_prob*100)}%</span>
+        <span className="regime-prob" style={{color:"#eab308"}}>维持 {Math.round(regime.stay_prob*100)}%</span>
+        <span className="regime-prob" style={{color:"#22c55e"}}>改善 {Math.round(regime.improve_prob*100)}%</span>
+      </div>)}
+    </div>
+  </div>);
+}
+
+function ForwardNarrative({text}){
+  if(!text) return null;
+  // Split by paragraphs for clean rendering
+  const paragraphs=text.split(/\n\n+/).filter(p=>p.trim());
+  return(<div className="fwd-narrative">
+    <div className="fwd-title">🧠 AI 前瞻研判</div>
+    <div className="narrative-body">
+      {paragraphs.map((p,i)=>(<p key={i} className="narrative-para">{p.trim()}</p>))}
+    </div>
+    <div className="narrative-disclaimer">以上由AI基于量化信号生成，仅供参考，不构成投资建议</div>
+  </div>);
+}
+
+function ForwardAnalysisSection({fwd}){
+  if(!fwd) return(<div className="fwd-empty-section"><div className="section-divider">🔮 前瞻分析</div><div className="fwd-panel" style={{textAlign:"center",padding:32,color:"#64748b"}}>前瞻分析数据尚未生成。运行完整 pipeline 后可用。</div></div>);
+  return(<div>
+    <div className="section-divider">🔮 前瞻分析 — 趋势 · 回测 · 预判</div>
+    <ForwardSignalHero signal={fwd.forward_signal} regime={fwd.regime_outlook}/>
+    <ForwardNarrative text={fwd.ai_narrative}/>
+    <TrendPanel trends={fwd.trend_summary}/>
+    <AnalogueTable analogues={fwd.historical_analogues} fwdStats={fwd.forward_return_stats}/>
+  </div>);
+}
+
 function MacroDashboardTab({data}){
   const meta=data.meta||{};const reportDate=meta.report_date||"";const genTime=(data.generated_at||"").slice(0,19);
   return(<div>
@@ -353,6 +512,7 @@ function MacroDashboardTab({data}){
     <AssetCards outlook={data.asset_outlook||{}}/>
     <ScoreBreakdown data={data}/>
     <div className="note" style={{marginBottom:24}}>评分方法：每个指标综合「当前分位(40%)+近期趋势(35%)+Z-Score偏离度(25%)」计算0-100分。权重来自宏观金融研究。BTC对流动性beta约1.5x，纳斯达克约1.05x，标普500约0.9x。本评分仅供参考，不构成投资建议。</div>
+    <ForwardAnalysisSection fwd={data.forward_analysis}/>
     <div className="section-divider">综合研判</div>
     <JudgmentBox judgment={data.judgment||{}}/>
     <div className="section-divider">指标速览</div>

@@ -307,11 +307,32 @@ def main():
     score_data = scorer.compute(daily_panel, signal_panel)
     logger.info(f"Score: {score_data['composite_score']:.0f}/100 -> {score_data['tier_cn']}")
 
+    # ---- Phase 10.5: Forward-Looking Analysis ----
+    logger.info("Phase 10.5: Forward-looking analysis (trends + analogues + AI)...")
+    forward_data = None
+    try:
+        from src.forward_analyzer import ForwardAnalyzer
+        fwd_analyzer = ForwardAnalyzer(config)
+        forward_data = fwd_analyzer.analyze(daily_panel, signal_panel, score_data)
+
+        # Generate AI narrative if API key available
+        import os
+        fwd_api_key = config.get('daily_brief', {}).get('analysis', {}).get('api_key', '')
+        fwd_api_key = fwd_api_key or os.environ.get('ANALYSIS_API_KEY', '')
+        if fwd_api_key and forward_data:
+            narrative = fwd_analyzer.generate_narrative(forward_data, score_data, fwd_api_key)
+            forward_data['ai_narrative'] = narrative
+            logger.info(f"Forward narrative: {'generated' if narrative else 'skipped (no key)'}")
+    except Exception as e:
+        logger.warning(f"Forward analysis failed (non-critical): {e}")
+        import traceback
+        traceback.print_exc()
+
     # ---- Phase 11: Web JSON Export ----
     logger.info("Phase 11: Exporting web JSON...")
     from src.web_export import WebExporter
     exporter = WebExporter(config)
-    exporter.export(summary, score_data)
+    exporter.export(summary, score_data, forward_data=forward_data)
 
     # ---- Auto-copy to data/ for Vercel ----
     deploy_path = PROJECT_ROOT / "data" / "latest.json"
@@ -441,6 +462,21 @@ def verify_output():
             ok_items.append(f"✅ 投资展望: {len(outlook)} 条")
         else:
             issues.append("⚠️  投资展望: 无数据")
+
+    # Check forward analysis
+    fwd = data.get('forward_analysis')
+    if fwd:
+        n_trends = len(fwd.get('trend_summary', {}))
+        n_analogues = len(fwd.get('historical_analogues', []))
+        fwd_score = fwd.get('forward_signal', {}).get('score')
+        fwd_bias = fwd.get('forward_signal', {}).get('bias_cn', '')
+        ok_items.append(f"✅ 前瞻分析: {n_trends}指标趋势, {n_analogues}历史类比, 前瞻信号 {fwd_score:.0f} ({fwd_bias})")
+        if fwd.get('ai_narrative'):
+            ok_items.append(f"✅ AI前瞻研判: 已生成 ({len(fwd['ai_narrative'])}字)")
+        else:
+            issues.append("⚠️  AI前瞻研判: 未生成 (需要API Key)")
+    else:
+        issues.append("⚠️  前瞻分析: 未生成")
 
     # Print report
     print(f"\n{'='*50}")

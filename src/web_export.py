@@ -26,7 +26,8 @@ class WebExporter:
         self.output_dir = Path(config.get("output", {}).get("base_dir", "output"))
         self.chart_dir = self.output_dir / "charts"
 
-    def export(self, summary: dict, score_data: dict, web_dir: Path = None) -> str:
+    def export(self, summary: dict, score_data: dict, web_dir: Path = None,
+               forward_data: dict = None) -> str:
         """
         Generate latest.json with all dashboard data.
 
@@ -34,6 +35,7 @@ class WebExporter:
             summary: from Summarizer
             score_data: from MacroScorer
             web_dir: directory to write the JSON (default: output/web/)
+            forward_data: from ForwardAnalyzer (optional)
 
         Returns:
             Path to the generated JSON file.
@@ -94,6 +96,9 @@ class WebExporter:
 
             # Charts (base64)
             "charts": charts_b64,
+
+            # Forward-looking analysis (trends, analogues, AI narrative)
+            "forward_analysis": forward_data if forward_data else None,
         }
 
         # Write JSON

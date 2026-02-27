@@ -258,14 +258,31 @@ function BriefStatusBar({brief}){
   return(<div className="brief-status"><div className="brief-date">{brief.date||new Date().toLocaleDateString('zh-CN')}</div><div className="brief-update">更新于 {brief.update_time||"--:--"}</div><div className={`brief-badge ${cls}`}>{label}</div></div>);
 }
 
+function DataErrorBox({title,status,errorDetail,hints}){
+  return(<div style={{background:"#1e1a2e",border:"1px solid #4c1d95",borderRadius:12,padding:"20px 24px",marginBottom:16}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span style={{fontSize:18}}>⚠️</span><span style={{fontSize:14,fontWeight:700,color:"#c4b5fd"}}>{title}</span><span style={{fontSize:11,padding:"2px 8px",background:"rgba(239,68,68,0.15)",color:"#fca5a5",borderRadius:4}}>{status}</span></div>{errorDetail&&<div style={{fontSize:12,color:"#a78bfa",background:"rgba(0,0,0,0.3)",padding:"8px 12px",borderRadius:6,marginBottom:10,fontFamily:"monospace",wordBreak:"break-all"}}>{errorDetail}</div>}<div style={{fontSize:12,color:"#94a3b8",lineHeight:1.8}}>{hints.map((h,i)=><div key={i}>{h}</div>)}</div></div>);
+}
+
 function MarketCards({market}){
-  const indices=(market?.indices||[]).filter(i=>i.price!=null);
-  if(!indices.length) return <div style={{color:"#475569",textAlign:"center",padding:30}}>行情数据暂不可用</div>;
+  const allIndices=market?.indices||[];
+  const indices=allIndices.filter(i=>i.price!=null);
+  if(!indices.length){
+    const err=market?.error_detail||allIndices.find(i=>i.error)?.error||"";
+    const errLower=(err+"").toLowerCase();
+    let hints=[];
+    if(errLower.includes("timeout")||errLower.includes("connect")){hints=["→ 网络连接超时，请检查网络或VPN状态","→ 终端测试: curl -I https://query2.finance.yahoo.com","→ 执行 ./deploy.sh --brief-only 重新获取"];}
+    else if(errLower.includes("401")||errLower.includes("403")||errLower.includes("consent")){hints=["→ Yahoo Finance API 鉴权失败","→ 尝试在浏览器访问 finance.yahoo.com 并同意 cookie 弹窗后重试","→ 执行 ./deploy.sh --brief-only 重新获取"];}
+    else if(errLower.includes("json")||errLower.includes("decode")){hints=["→ 返回内容不是有效JSON，可能被防火墙/代理拦截","→ 检查是否有公司VPN或防火墙规则","→ 执行 ./deploy.sh --brief-only 重新获取"];}
+    else{hints=["→ Yahoo Finance API 请求失败","→ 中国大陆可能需要代理/VPN才能访问","→ 也可能是 Yahoo API 临时故障，稍后重试","→ 确认能访问 finance.yahoo.com 后执行 ./deploy.sh --brief-only"];}
+    return <DataErrorBox title="行情数据获取失败" status={market?.status_text||"error"} errorDetail={err||"Yahoo Finance API 未返回有效数据"} hints={hints}/>;
+  }
   return(<div className="market-grid">{indices.map(idx=>{const sc=idx.status_color||idx.trading_status_color||"#64748b";const dr=idx.day_range||idx.range_display;return(<div className="market-card" key={idx.symbol}><div className="market-card-header"><div className="market-card-name">{idx.name}</div><div className="market-card-status" style={{background:sc+"20",color:sc}}>{idx.trading_status}</div></div><div className="market-card-price" style={{color:idx.change_color||"#e2e8f0"}}>{idx.price_display||"N/A"}</div><div className="market-card-change" style={{color:idx.change_color||"#94a3b8"}}>{idx.change_display||"N/A"}</div>{dr&&<div className="market-card-range">日内: {dr}</div>}</div>);})}</div>);
 }
 
 function MoversPanel({movers}){
   const gainers=movers?.gainers||[]; const losers=movers?.losers||[];
+  if(gainers.length===0&&losers.length===0&&movers?.status==="error"){
+    return <DataErrorBox title="明星股异动获取失败" status="依赖行情数据" errorDetail="明星股异动追踪依赖 Yahoo Finance 行情接口，行情数据获取失败时异动也无法生成。" hints={["→ 解决上方行情数据问题后，异动数据将自动恢复","→ 明星股覆盖: 美股20只、港股12只、A股10只","→ 异动阈值: 日涨跌幅 ≥3% 才会展示"]}/>;
+  }
   const getReason=(s)=>{const r=s.reason;if(!r)return{text:null,url:null};if(typeof r==="string")return{text:r!=="暂无可靠原因"?r:null,url:s.news_url||null,source:null};return{text:r.text&&r.text!=="暂无可靠原因"?r.text:null,url:r.url||null,source:r.source||null};};
   const renderList=(items,type)=>(<div className="movers-panel"><div className={`movers-header ${type}`}>{type==="gainers"?"🔥 涨幅榜":"💧 跌幅榜"} ({items.length})</div>{items.length===0?(<div style={{padding:16,textAlign:"center",color:"#475569",fontSize:12}}>暂无显著异动 (阈值 ±3%)</div>):items.map((s,i)=>{const reason=getReason(s);return(<div className="mover-row" key={s.symbol}><div className="mover-rank">{i+1}</div><div className="mover-info"><div className="mover-name">{s.name}</div><div className="mover-code">{s.symbol} · {s.market}</div>{reason.text?(<div className="mover-reason">{reason.text}{reason.url&&<>{" · "}<a href={reason.url} target="_blank" rel="noopener">{reason.source||"来源"}</a></>}</div>):(<div className="mover-no-reason">暂无可靠原因</div>)}</div><div className="mover-change" style={{color:type==="gainers"?"#86efac":"#fca5a5"}}>{(s.change_pct||0)>0?"+":""}{(s.change_pct||0).toFixed(1)}%</div></div>);})}</div>);
   return(<div className="movers-grid">{renderList(gainers,"gainers")}{renderList(losers,"losers")}</div>);

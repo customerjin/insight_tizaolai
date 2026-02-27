@@ -35,6 +35,10 @@ class MarketService:
         for idx in indices:
             processed.append(self._process_index(idx))
 
+        # Collect errors for debugging
+        errors = [p.get('error') for p in processed if p.get('error')]
+        error_msg = errors[0] if errors else None
+
         # Overall status
         ok_count = sum(1 for p in processed if p['price'] is not None)
         if ok_count == len(processed):
@@ -65,6 +69,7 @@ class MarketService:
         return {
             'status': status,
             'status_text': status_text,
+            'error_detail': error_msg,
             'indices': processed,
             'summary': summary,
             'update_time': datetime.now().strftime('%Y-%m-%d %H:%M'),
@@ -139,4 +144,5 @@ class MarketService:
             'status_color': status_color,
             'data_time': idx.get('data_time'),
             'currency': idx.get('currency', ''),
+            'error': idx.get('error'),
         }
